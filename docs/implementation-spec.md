@@ -290,11 +290,16 @@ Failure 代碼如下，代碼與語意都屬於合約：
 - **Repo 形態**：頂層目錄依部署面命名，Python 套件依 context 命名：
   - `backend/`：你部署的部分。一個 Python 專案，`src/` 底下只有 `token_broker` 一個套件。
   - `plugin/`：使用者安裝的部分。`plugin/` 本身就是一個 Python 專案（單一 `pyproject.toml` 與 `uv.lock`），`src/` 底下有三個最上層套件：`local_authorization`、`drive_reading`、`mcp_server`。`pyproject.toml` 的打包設定要明確列出這三個套件。不使用 uv workspace：uv 會把 workspace 成員裝進同一個虛擬環境，各自宣告依賴無法阻止互相 import，換不到額外的強制力。
-  - 每個 context 內部分成三層：`domain/`（純規則，不依賴任何框架或 IO 函式庫，允許 pydantic）、`app/`（use case 與對外公開的 API）、`adapters/`（HTTP、檔案、Google API、PDF 與影像函式庫）。
+  - 每個 context 內部採用 DDD 經典分層：
+    - `domain/`：純規則，不依賴任何框架或 IO 函式庫（允許 pydantic）。
+    - `app/`：use case，也是這個 context 對其他 context 公開的 API。
+    - `infra/`：我們呼叫外部的技術實作，例如 Google API client、檔案存取、Broker client、PDF 與影像函式庫、loopback listener。
+    - `api/`：外部呼叫我們的入口。只有 `token_broker` 有（FastAPI route 與 HTML 頁面）；plugin 的對外入口是 `mcp_server` 的 tools，位於 context 之外。
+  - 實例由組裝層（`token_broker` 的 `main.py`、plugin 的 `mcp_server`）建立，再透過建構子傳入 `app/`，因此測試時可以傳入假的 infra，不需要另外定義 Protocol。
   - **context 之間的依賴規則**，以 import-linter 寫在 `pyproject.toml`、由 CI 檢查：
-    1. context 之間只能 import 對方的 `app/`，禁止 import 對方的 `domain/` 與 `adapters/`。
+    1. context 之間只能 import 對方的 `app/`，禁止 import 對方的 `domain/`、`infra/`。
     2. 方向單向：`drive_reading` 可以 import `local_authorization.app`；`local_authorization` 禁止 import `drive_reading`。
-    3. 每個 context 內部的分層方向是 `adapters → app → domain`。
+    3. 每個 context 內部的分層方向是 `api → app → infra → domain`：上層可以 import 下層，下層不能 import 上層。`app` 直接 import `infra`，依賴關係看得見；`domain` 不 import 任何其他層。
     4. `mcp_server` 可以 import 兩個 context（組裝需要），但兩個 context 都不能 import `mcp_server`。
     5. Token Broker 與 plugin 是不同的部署單元，彼此不 import，只透過 C1 溝通。`state` 格式在兩邊各自實作，由兩邊的合約測試鎖住同一個格式。
   - repo 根目錄的 `.claude-plugin/marketplace.json` 以 `source: "./plugin"` 指向 plugin，因此驗收者只會安裝 `plugin/`，不會拿到後端程式碼。
