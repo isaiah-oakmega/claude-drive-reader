@@ -110,6 +110,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 - **A4** Local Credential 檔案不會以寬於 `0600` 的權限存在：
   - 目錄權限為 `0700`
   - 檔案以 `O_CREAT` 加 `0o600` 建立，先寫入暫存檔再用 `os.replace` 原子替換
+  - **Windows 例外**：Windows 會忽略 POSIX 權限位元，`os.open` 的 mode 無效。保護來自檔案位於使用者設定檔目錄下，預設 ACL 只允許該使用者存取。程式不另外設定 ACL，此差異在 README 與架構說明中寫明，不宣稱 Windows 上有 `0600`。
 - **A5** refresh 時收到 `invalid_grant`，表示 Local Credential 已失效，應立即刪除。
 - **A6** `logout` 先向 Google revoke，再刪除檔案。revoke 失敗不阻擋刪除，但要回報給使用者。
 
@@ -125,8 +126,9 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 - **R4** 交付給 Claude 的內容都有上限：
   - 下載 ≤ 20MB（下載前用 `size` 判斷）
   - 文字 ≤ 50,000 字
-  - PDF 算繪 ≤ 5 頁
+  - PDF 算繪 ≤ 5 頁（整份文件合計）
   - 圖片長邊 ≤ 1568px
+- **R4a** PDF **逐頁**判斷：抽出的文字量低於門檻的頁面，就算繪成影像。回傳時依頁碼順序穿插文字與影像，因此混合文字頁與掃描頁的 PDF 不會漏讀。超過 R4 上限的頁面不回傳，並註明「第 N 頁以後省略」。
 - **R5** 不支援的類型、過大、截斷、無文字層改用影像，都屬於 **Read Limitation**，以正常結果回傳，並附上中繼資料與原因。
 - **R6** **Failure** 一定帶有代碼與「下一步」。Drive 回 404 時一律視為「找不到或沒有權限」，並附上目前授權帳號的 email。
 - **R7** 只對安全且可重試的 Google 呼叫自動重試（GET、export、about），遇到 429 或 5xx 時以指數退避重試 2 次。
@@ -248,6 +250,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 4. **授權逾時**：5 分鐘內沒有完成，listener 自動關閉；`auth_status` 顯示沒有進行中的授權，重新 `authorize` 即可。
 5. **讀取有文字層的 PDF**：回傳文字，超過 50k 字時截斷並註明。
 6. **讀取掃描型 PDF**：回傳前 5 頁影像，並註明「無文字層」。
+6a. **讀取混合型 PDF**（部分頁面有文字、部分是掃描頁）：依頁碼順序回傳，有文字的頁面給文字，掃描頁給影像。
 7. **讀取圖片**：縮放後以 image content 回傳，Claude 描述內容。若格式無法處理，回報 Read Limitation 與中繼資料。
 8. **讀取子資料夾內的檔案**：使用列出時取得的 ID，通過 R1 檢查後讀取。
 9. **讀取 Google 文件、試算表、簡報**：匯出後回傳，試算表會註明只有第一個工作表。
@@ -257,6 +260,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 13. **prompt injection**：檔案內容誘導 Claude 讀取 Root Folder 外的檔案，`read_file` 回傳 `OUTSIDE_ROOT`。
 14. **Broker 無法連線**：回傳 `BROKER_UNREACHABLE`，附上 Broker 網址。
 15. **登出**：revoke 並刪除檔案，之後任何讀取都回到 `NOT_AUTHORIZED`。
+16. **使用超過一小時**：access token 過期，自動透過 Broker refresh，使用者不會察覺。
 
 ## Implementation Decisions
 
@@ -265,7 +269,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 - **同意畫面**：Production、不送驗證（restricted scope 的驗證需要 CASA，不在範圍內）。README 附警告畫面的說明。
 - **MCP server 技術**：Python 官方 `mcp` SDK（stdio），透過 `uv run --directory ${CLAUDE_PLUGIN_ROOT}/mcp-server` 啟動，依賴版本由 `uv.lock` 鎖定。
 - **檔案類型處理**：
-  - PDF 用 `pypdfium2`，先抽文字，抽不到再算繪頁面
+  - PDF 用 `pypdfium2` 逐頁處理：有文字的頁面回傳文字，沒有文字的頁面算繪成影像（R4a）
   - 圖片用 Pillow 縮放或轉檔
   - SVG 與文字類型以 UTF-8 文字回傳
   - 不解析 docx、xlsx 等格式
@@ -323,12 +327,13 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | C1 形狀變更 | Contract | Broker 測試，加上 Local Authorization 的 Broker client 測試 | Drive Reading 測試 |
 | Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、`state` 不符、使用者拒絕）、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
 | Drive Reading：存取與列出 | Context | 假 Drive：R1（含共用雲端硬碟、無法存取的祖先）、R2 捷徑、R3 上限、循環、分頁、404 與 401 的對應 | Broker 測試、Local Authorization 測試 |
-| Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、PNG、超大圖片、不支援的類型；R4 上限、R5 回傳形狀 | 其他所有測試 |
+| Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、**混合型 PDF**、PNG、超大圖片、不支援的類型；R4、R4a 上限與頁序、R5 回傳形狀 | 其他所有測試 |
 | MCP Tool Surface（C3） | Contract | tool 註冊與參數 schema、Failure 格式 `[代碼] … 下一步：…` | 內部 handler 細節（已由 context 測試涵蓋） |
 | 共用或 plugin 打包（`.mcp.json`、`uv.lock`） | System | 在乾淨環境執行 `uv run` 啟動，並以 MCP 握手驗證 | — |
-| 交付里程碑 | Release | 在乾淨的 Claude Code 環境照 README 安裝，用第二個帳號跑完 spec 09 的自我驗收清單（情境 1–15），結果記錄在 `docs/` | — |
+| 交付里程碑 | Release | 在乾淨的 Claude Code 環境照 README 安裝，用第二個帳號跑完 spec 09 的自我驗收清單（情境 1–16，其中情境 16 要等 access token 實際過期後再讀一次），結果記錄在 `docs/` | — |
 
-- CI（GitHub Actions）在 push 時執行全部 pytest，不連真實的 Google。
+- CI（GitHub Actions）在 push 時，於 **ubuntu、macos、windows 三個平台**執行全部 pytest，不連真實的 Google。credential 權限測試在 Windows 上改為驗證「不宣稱 `0600`」的行為。
+- 手動 Release 驗收至少在開發機以外的一個作業系統上進行一次。若手邊沒有其他作業系統，就以 CI 的三平台結果為準，並在驗收紀錄中註明。
 - 真實的 Google 流程只在步驟 1、2 完成時，以及 Release 驗收時手動執行。
 
 ## Migration / Compatibility
@@ -359,3 +364,4 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | 6 | Drive 支援把 Google 文件 export 成 `text/markdown` | 原生格式的讀取 | 步驟 4。不支援時改用 `text/plain` |
 | 7 | 驗收在 2026-11-23 之後的某個時間進行 | Broker、OAuth Client、Production 狀態都必須持續有效 | 交付後不修改 C1，Cloud Run 免費額度足夠 |
 | 8 | 從 GitHub 安裝時，marketplace 的 plugin `source` 可以指向子目錄 `./plugin` | 安裝路徑 | 步驟 2 第一個驗證。不支援時退回 `"./"`，plugin 檔案移回 repo 根目錄 |
+| 9 | 驗收者使用的作業系統和開發機不同（Windows、macOS） | 安裝與執行的穩定性 | CI 三平台矩陣；Windows 權限差異見 A4；`uv`、`pypdfium2`、Pillow 都有三平台的預編譯版本 |
