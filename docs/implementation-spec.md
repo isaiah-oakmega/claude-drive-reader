@@ -53,7 +53,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
   - Authorization Attempt（記憶體）
   - Local Credential（檔案）
   - access token 快取（記憶體）
-- **擁有的不變式**：見 Domain Rules A1–A6。
+- **擁有的不變式**：見 Domain Rules A1–A7。
 - **不負責**：持有 client secret、組 Google 授權 URL（屬於 Broker）、任何 Drive 讀取邏輯。
 
 ### 3. Drive Reading（部署單元：本機 MCP server，套件 `plugin/src/drive_reading`）
@@ -118,6 +118,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
   - **Windows 例外**：Windows 會忽略 POSIX 權限位元，`os.open` 的 mode 無效。保護來自檔案位於使用者設定檔目錄下，預設 ACL 只允許該使用者存取。程式不另外設定 ACL，此差異在 README 與架構說明中寫明，不宣稱 Windows 上有 `0600`。
 - **A5** refresh 時收到 `invalid_grant`，表示 Local Credential 已失效，應立即刪除。
 - **A6** `logout` 先向 Google revoke，再刪除檔案。revoke 失敗不阻擋刪除，但要回報給使用者。
+- **A7** 本機 loopback 的結果頁只依結果類型顯示事先寫好的固定訊息，絕不把請求參數（例如 `state`、`error`、`code`）原樣輸出到 HTML，與 Broker 的 B6 相同原則。
 
 ### Drive Reading
 
@@ -141,6 +142,16 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 - **R5** 不支援的類型、過大、截斷、無文字層改用影像，都屬於 **Read Limitation**，以正常結果回傳，並附上中繼資料與原因。
 - **R6** **Failure** 一定帶有代碼與「下一步」。Drive 回 404 時一律視為「找不到或沒有權限」，並附上目前授權帳號的 email。
 - **R7** 只對安全且可重試的 Google 呼叫自動重試（GET、export、about），遇到 429 或 5xx 時以指數退避重試 2 次。
+
+### 參數值
+
+規則中沒有明寫數值的參數，取值如下：
+
+| 參數 | 值 | 放在哪裡 |
+|---|---|---|
+| R4a 的「文字量門檻」 | 一頁抽出的非空白字元少於 20 個，就算繪成影像 | `drive_reading/domain/limits.py` |
+| R7 的退避間隔 | 第一次重試前等 1 秒，第二次等 2 秒 | `drive_reading/domain/limits.py` |
+| R4 的 HTTP timeout | 連線 10 秒、讀取 30 秒；Drive、Broker、Google OAuth 一律相同 | 各 context 的 `domain/limits.py`（Broker 為 `token_broker/domain/limits.py`），由 `infra/` 引用 |
 
 ### 驗證與呈現（不屬於 domain 不變式）
 
@@ -201,7 +212,7 @@ Google OAuth ──▶ Token Broker ──C1──▶ Local Authorization ──
 | `list_files` | `folder?`（ID 或 URL，預設 Root Folder）、`recursive=True` | 每行一個項目：相對路徑、mimeType、大小、修改時間、ID；捷徑另外標示目標 ID；截斷時附註 |
 | `read_file` | `file`（ID 或 URL） | 文字 content；或 image content 加一行中繼資料；或 Read Limitation 說明。若參數是資料夾，回 Failure 並提示使用 `list_files` |
 | `authorize` | — | 立即回傳授權 URL 與「完成後告訴我」；背景等待 Code Relay |
-| `auth_status` | — | 是否已授權、帳號 email、是否有進行中的 Authorization Attempt |
+| `auth_status` | — | 是否已授權、帳號 email、是否有進行中的 Authorization Attempt、上一次 Attempt 的結果（成功、拒絕、逾時、失敗；本次 process 尚未嘗試時為無） |
 | `logout` | — | revoke 與刪除的結果 |
 
 Failure 代碼如下，代碼與語意都屬於合約：
@@ -360,7 +371,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 |---|---|---|---|
 | Token Broker 內部 | Context | pytest 加 `httpx.MockTransport`：B2 各種惡意 `state`（非數字、超出範圍、夾帶 host 或路徑）、B3 的 422、B1（應用程式 log 不含 token 與 query string）、B6（錯誤頁不回顯參數）、`/authorize` 組出的 URL 參數 | MCP server 測試 |
 | C1 形狀變更 | Contract | Broker 測試，加上 Local Authorization 的 Broker client 測試 | Drive Reading 測試 |
-| Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、使用者拒絕；**`state` 不符的請求回 400 且不結束 Attempt，之後的有效 callback 仍能完成授權**）、`DRIVE_READER_CALLBACK_PORT` 固定 port、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
+| Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、使用者拒絕；**`state` 不符的請求回 400 且不結束 Attempt，之後的有效 callback 仍能完成授權**）、`DRIVE_READER_CALLBACK_PORT` 固定 port、A7 結果頁不回顯參數、`auth_status` 回報上一次 Attempt 的結果、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
 | Drive Reading：存取與列出 | Context | 假 Drive：R1（含共用雲端硬碟、無法存取的祖先）、R2 捷徑、R3 上限、循環、分頁、404 與 401 的對應 | Broker 測試、Local Authorization 測試 |
 | Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、**混合型 PDF**、PNG、超大圖片、不支援的類型；R4、R4a 上限與頁序、R5 回傳形狀；**沒有 `size` 的串流超過 20MB 時中止**、`exportSizeLimitExceeded` 對應成 Read Limitation、HTTP timeout | 其他所有測試 |
 | MCP Tool Surface（C3） | Contract | tool 註冊與參數 schema、Failure 格式 `[代碼] … 下一步：…` | 內部 handler 細節（已由 context 測試涵蓋） |
