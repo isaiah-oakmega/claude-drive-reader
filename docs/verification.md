@@ -18,7 +18,8 @@
 
 | 項目 | 方法 | 結果 |
 |---|---|---|
-| 兩個專案的套件都能 import | `tests/test_smoke.py` | |
-| lockfile 與 `pyproject.toml` 一致 | `uv sync --locked` | |
-| 依賴規則可以執行、目前沒有違規 | `lint-imports` | |
+| 兩個專案的套件都能 import | `tests/test_smoke.py` | ✅ 2026-11-10 本機（Linux）：backend 5 passed、plugin 9 passed |
+| lockfile 與 `pyproject.toml` 一致 | `uv sync --locked` | ✅ 2026-11-10 本機 |
+| 依賴規則可以執行、目前沒有違規 | `lint-imports` | ✅ 2026-11-10 本機：backend 1 kept、plugin 4 kept |
+| 依賴規則確實會擋下違規 | 暫時在 `drive_reading.domain` 加入 `import local_authorization.infra` 與 `import drive_reading.app` | ✅ 2026-11-10 本機：規則 1 與分層規則 BROKEN，還原後 4 kept（正式的 CI 故意失敗測試在階段 6） |
 | 三平台 CI | GitHub Actions：ubuntu、macos、windows | |
