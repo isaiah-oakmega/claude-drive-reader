@@ -42,3 +42,47 @@
 | C5 缺設定時啟動失敗、不洩漏值 | `tests/test_settings.py`；本機 `docker run` 不帶環境變數時輸出 `MissingSettings`，只列變數名稱 | ✅ |
 | Docker 映像檔可建置 | `docker build`（`uv sync --locked --no-dev`） | ✅ |
 | 三平台 CI | run #42665407626：backend 與 plugin × ubuntu、macos、windows | ✅ 6/6 success |
+
+## 階段 1b：Broker 部署與真實驗證
+
+部署在 Cloud Run `asia-east1`，服務名稱 `token-broker`，自訂網域 `https://drive-auth.isaiahlin.dev`。
+
+### 部署設定
+
+| 項目 | 結果 |
+|---|---|
+| 啟用的 API | Run、Cloud Build、Artifact Registry、Secret Manager、Drive、Logging、IAM |
+| 風險 #3：網域擁有權與 region 支援 domain mapping | ✅ 2026-11-10 `gcloud domains list-user-verified` 列出 `isaiahlin.dev`；`asia-east1` 可建立 domain mapping |
+| 執行用的 service account | 專用的 `token-broker@…`，只對 `google-oauth-client-secret` 這一個 secret 有 `secretAccessor` |
+| 從原始碼建置的權限 | 第一次 `gcloud run deploy --source` 因預設 compute service account 沒有建置權限而失敗；給它 `roles/run.builder` 後成功。只影響建置，執行時仍用上面的專用 service account |
+| 規模 | `--min-instances 0 --max-instances 2`，沒有流量時不計費 |
+| 設定來源 | `GOOGLE_CLIENT_ID`、`PUBLIC_BASE_URL` 為環境變數；`GOOGLE_CLIENT_SECRET` 從 Secret Manager 掛入，不出現在部署指令或 revision 設定的明文中 |
+
+### B1：平台層的 log 排除
+
+應用程式自己不記 query string（階段 1a 已驗證），但 Cloud Run 平台的 request log 會記下完整網址，包含 `/callback?code=…`。因此在 `_Default` sink 加上排除規則 `exclude-broker-callback`：
+
+```
+resource.type="cloud_run_revision" AND resource.labels.service_name="token-broker" AND httpRequest.requestUrl:"/callback"
+```
+
+| 探測 | 送出時間（UTC） | 是否被記錄 |
+|---|---|---|
+| `/callback?code=x…`（規則剛建立） | 2026-11-09 17:45 | 有 |
+| `/callback?code=EXCLUSION-PROBE-2…` | 17:48 | 有（同時送出的對照請求也有，確認 filter 能比對到這些記錄） |
+| `/callback?code=EXCLUSION-PROBE-3…` | 17:51 | **沒有** ✅ |
+
+觀察：排除規則建立後約 5 分鐘才生效。被記下的三筆都是假的 code，不是真實授權碼。重建步驟要寫明「先設定排除規則、等 5 分鐘，再做第一次真實授權」。
+
+### 規格修正：健康檢查改為 `/health`
+
+部署後 `GET /healthz` 回的是 Google 前端自己的 404，請求根本沒進到容器：Cloud Run 保留結尾是 `z` 的路徑。經同意後把 C1 改成 `GET /health`（規格與程式各一個 commit）。重新部署為 revision `token-broker-00002-ds5` 後，`/health` 回 200 `ok`；service account 與 `max-instances` 沿用原設定。
+
+部署時的一次失敗：重新部署時上傳的是整個 repo 根目錄，而不是 `backend/`。根目錄沒有 Dockerfile，Cloud Build 就改用 buildpacks 自動判斷，因為找不到程式進入點而失敗，線上的舊 revision 不受影響。部署指令一律在 repo 根目錄執行，並明確指定 `--source backend`。
+
+### 真實驗收
+
+| 項目 | 帳號 | 結果 |
+|---|---|---|
+| `*.run.app` 上的端點：`/`、`/privacy` 200；`/docs` 404；`/authorize` 302 到 Google；不合法的 `/callback` 400；形狀不合的 `/token` 422 | — | ✅ 2026-11-10 |
+| 假的 refresh token 經 Broker 送到真實 Google，Google 的錯誤原樣轉回 | — | ✅ 2026-11-10：400 `{"error":"invalid_grant","error_description":"Bad Request"}` |
