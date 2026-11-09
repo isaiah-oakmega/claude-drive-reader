@@ -24,6 +24,12 @@
 | [ADR](adr/) | 難以回頭的架構決策與其取捨 |
 | [名詞表](../CONTEXT.md) | 專案的 ubiquitous language |
 
+## 部署與設定
+
+| 文件 | 內容 |
+|------|------|
+| [外部環境申請步驟](setup-gcp-oauth.md) | GCP 專案、gcloud、Search Console、OAuth 同意畫面與 Client、Secret Manager 的逐步說明 |
+
 ## 標記約定
 
 - **[必要]**：原文明確要求，驗收必看。
