@@ -181,8 +181,8 @@ def test_home_and_privacy_pages_are_served(client: TestClient) -> None:
     assert "drive.readonly" in privacy.text
 
 
-def test_healthz(client: TestClient) -> None:
-    response = client.get("/healthz")
+def test_health(client: TestClient) -> None:
+    response = client.get("/health")
 
     assert response.status_code == 200
     assert response.text == "ok"

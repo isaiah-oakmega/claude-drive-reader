@@ -67,8 +67,9 @@ def build_router(oauth: GoogleOAuthClient) -> APIRouter:
     def privacy() -> HTMLResponse:
         return HTMLResponse(pages.privacy_page())
 
-    @router.get("/healthz")
-    def healthz() -> PlainTextResponse:
+    # 不用慣例的 /healthz：Cloud Run 保留結尾是 z 的路徑，請求到不了容器。
+    @router.get("/health")
+    def health() -> PlainTextResponse:
         return PlainTextResponse("ok")
 
     return router
