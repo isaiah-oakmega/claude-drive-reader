@@ -185,9 +185,10 @@ Google OAuth ──▶ Token Broker ──C1──▶ Local Authorization ──
 | `GET /callback` | Google 回傳的 `code`、`state` 或 `error`、`state` | 302 到 `http://127.0.0.1:<port>/callback`，參數原樣轉交（B2） | 400 HTML（`state` 格式不合） |
 | `POST /token` | JSON：`{grant_type:"authorization_code", code, code_verifier}` 或 `{grant_type:"refresh_token", refresh_token}` | 200：`{access_token, expires_in, scope, token_type, refresh_token?}` | 422（形狀不合）；400 `{error, error_description}`（原樣轉交 Google 的錯誤，例如 `invalid_grant`）；502 `{error:"upstream_unavailable"}` |
 | `GET /`、`GET /privacy` | — | 靜態頁（同意畫面需要的首頁與隱私權政策） | — |
-| `GET /healthz` | — | 200 `ok` | — |
+| `GET /health` | — | 200 `ok` | — |
 
 - `prompt=consent` 確保每次授權都會拿到 refresh token。Google 預設只在第一次同意時才會給。
+- 健康檢查用 `/health`，不用慣例的 `/healthz`：Cloud Run 保留結尾是 `z` 的路徑，`/healthz` 的請求根本到不了容器，只會拿到 Google 前端的 404（部署時實測）。
 - 破壞性變更：`state` 格式、`/token` 的請求或回應形狀、錯誤代碼的語意。新增選填欄位屬於相容變更。
 
 ### C2 Access Token Provider（MCP server 內部）
