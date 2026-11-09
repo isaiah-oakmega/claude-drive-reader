@@ -16,6 +16,14 @@
 | 08 | [實作考量與風險](spec/08-implementation-notes.md) | 原文未明說、但會影響驗收成敗的技術細節（非原文要求） |
 | 09 | [需求追蹤清單](spec/09-requirements-checklist.md) | 所有需求的編號清單，供開發與自我驗收勾選 |
 
+## 設計
+
+| 文件 | 內容 |
+|------|------|
+| [實作規格](implementation-spec.md) | bounded contexts、不變式、公開合約（Broker API、MCP tools）、實作順序、驗證策略 |
+| [ADR](adr/) | 難以回頭的架構決策與其取捨 |
+| [名詞表](../CONTEXT.md) | 專案的 ubiquitous language |
+
 ## 標記約定
 
 - **[必要]**：原文明確要求，驗收必看。
