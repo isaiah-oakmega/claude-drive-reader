@@ -1,0 +1,65 @@
+[project]
+name = "drive-reader-plugin"
+version = "0.1.0"
+description = "Local MCP server for the Drive Reader Claude Code plugin"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "import-linter",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# 一個專案、三個最上層套件：兩個 context 加上組裝層 mcp_server。
+# 打包工具無法自動找到多個套件，必須明確列出（風險 #10 的檢查也以這份清單為準）。
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/local_authorization",
+    "src/drive_reading",
+    "src/mcp_server",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# 依賴規則由 import-linter 強制，見 docs/implementation-spec.md「Repo 形態」。
+[tool.importlinter]
+root_packages = ["local_authorization", "drive_reading", "mcp_server"]
+
+# 規則 1：context 之間只能透過對方的 app/。
+# app/ 會重新匯出自己 domain 的例外，因此經由 app/ 的間接 import 是允許的，只禁止直接碰對方內部。
+[[tool.importlinter.contracts]]
+name = "Drive Reading reaches Local Authorization only through app/"
+type = "forbidden"
+source_modules = ["drive_reading"]
+forbidden_modules = [
+    "local_authorization.domain",
+    "local_authorization.infra",
+]
+allow_indirect_imports = true
+
+# 規則 2：方向單向，provider 不能反過來依賴 consumer。
+[[tool.importlinter.contracts]]
+name = "Local Authorization does not depend on Drive Reading"
+type = "forbidden"
+source_modules = ["local_authorization"]
+forbidden_modules = ["drive_reading"]
+
+# 規則 3：每個 context 內部的分層方向（plugin 的 context 沒有 api/，對外入口是 mcp_server）。
+[[tool.importlinter.contracts]]
+name = "Context layers: app -> infra -> domain"
+type = "layers"
+containers = ["local_authorization", "drive_reading"]
+layers = ["app", "infra", "domain"]
+
+# 規則 4：mcp_server 負責組裝，可以 import 兩個 context；context 不能反過來 import 它。
+[[tool.importlinter.contracts]]
+name = "Contexts do not depend on mcp_server"
+type = "forbidden"
+source_modules = ["local_authorization", "drive_reading"]
+forbidden_modules = ["mcp_server"]

@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.project }} on ${{ matrix.os }}
+    strategy:
+      # 一個平台失敗不取消其他平台，才能一次看到所有平台的結果（風險 #9）
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        project: [backend, plugin]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      # --locked：lockfile 和 pyproject.toml 不一致就失敗，在我們這端擋下問題，
+      # 驗收者電腦上的 .mcp.json 才能放心用 --frozen
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Check dependency rules
+        run: uv run lint-imports
