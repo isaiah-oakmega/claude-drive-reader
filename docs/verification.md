@@ -22,7 +22,7 @@
 | lockfile 與 `pyproject.toml` 一致 | `uv sync --locked` | ✅ 2026-11-10 本機 |
 | 依賴規則可以執行、目前沒有違規 | `lint-imports` | ✅ 2026-11-10 本機：backend 1 kept、plugin 4 kept |
 | 依賴規則確實會擋下違規 | 暫時在 `drive_reading.domain` 加入 `import local_authorization.infra` 與 `import drive_reading.app` | ✅ 2026-11-10 本機：規則 1 與分層規則 BROKEN，還原後 4 kept（正式的 CI 故意失敗測試在階段 6） |
-| 三平台 CI | GitHub Actions：ubuntu、macos、windows | |
+| 三平台 CI | GitHub Actions：ubuntu、macos、windows | ✅ 2026-11-10 run #42665407626（`phase-1a-broker`，包含階段 0 全部 commit）：6 個 job 全部 success。階段 0 分支自己的 run 中，`plugin on macos-latest` 因 GitHub macOS runner 容量不足被取消，測試從未執行，不是失敗 |
 
 ## 階段 1a：Token Broker（Mock 測試）
 
@@ -41,3 +41,4 @@
 | 上游錯誤的對應 | `tests/infra/test_google_oauth.py`：Google 400 `invalid_grant` 透傳；500、503、429、非 JSON、格式不符的 200、連線失敗、逾時都轉成「上游無法使用」 | ✅ |
 | C5 缺設定時啟動失敗、不洩漏值 | `tests/test_settings.py`；本機 `docker run` 不帶環境變數時輸出 `MissingSettings`，只列變數名稱 | ✅ |
 | Docker 映像檔可建置 | `docker build`（`uv sync --locked --no-dev`） | ✅ |
+| 三平台 CI | run #42665407626：backend 與 plugin × ubuntu、macos、windows | ✅ 6/6 success |
