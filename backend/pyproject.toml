@@ -3,7 +3,11 @@ name = "token-broker"
 version = "0.1.0"
 description = "Stateless OAuth Token Broker for the Drive Reader Claude Code plugin"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162.2",
+    "httpx>=0.28.1",
+    "uvicorn>=0.54.0",
+]
 
 [dependency-groups]
 dev = [
@@ -20,6 +24,8 @@ packages = ["src/token_broker"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# 測試依 domain/app/infra/api 分資料夾，不同資料夾可能有同名檔案；importlib 模式避免模組名稱衝突
+addopts = "--import-mode=importlib"
 
 # 依賴規則由 import-linter 強制，見 docs/implementation-spec.md「Repo 形態」。
 # 規則 5（backend 與 plugin 互不 import）由兩個獨立專案的結構保證，不需要寫成 contract。
