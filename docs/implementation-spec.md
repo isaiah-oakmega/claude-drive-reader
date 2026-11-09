@@ -89,7 +89,9 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 
 ### Token Broker
 
-- **B1** Broker 不持久化任何 auth code、access token、refresh token。**應用程式本身**的 log 只記方法、路徑（不含 query string）、狀態碼；uvicorn 的 access log 要關閉或改成只記路徑。Cloud Run 平台的請求記錄會包含完整網址，因此 `/callback` 的 auth code 可能出現在 Cloud Logging 裡，這無法從程式碼關閉。這是接受的風險：auth code 只能使用一次，而且沒有本機的 PKCE verifier 就無法換到 token。
+- **B1** Broker 不持久化任何 auth code、access token、refresh token。**應用程式本身**的 log 只記方法、路徑（不含 query string）、狀態碼；uvicorn 的 access log 要關閉或改成只記路徑。Cloud Run 平台的請求記錄會包含完整網址，因此 `/callback` 的 auth code 可能出現在 Cloud Logging 裡，這無法從程式碼關閉。緩解措施有兩層：
+  - 部署時設定 Cloud Logging exclusion filter，不保存 `/callback` 的平台請求記錄。應用程式自己的 log 仍會記錄路徑與狀態碼，監控資料不會消失。這條設定要寫進 README 的部署步驟。
+  - 就算 exclusion 漏設或在生效前已被記錄，auth code 也只能使用一次，而且沒有本機的 PKCE verifier 就無法換到 token。
 - **B2** Code Relay 的目標只能是 `http://127.0.0.1:<port>/callback`：
   - `port` 從 `state` 的 `<port>.<nonce>` 格式解析，必須是 1024–65535 的整數
   - 格式不合時回 400 錯誤頁，不轉址
@@ -106,8 +108,9 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 
 - **A1** 同一個 MCP server process 中，同時最多一個 Authorization Attempt。新的 `authorize` 會關閉並取代舊的。
 - **A2** Authorization Attempt 是一次性的，5 分鐘後過期：
-  - listener 收到第一個 callback 後就關閉，不論成功或失敗
   - `state` 的 nonce 以常數時間比對
+  - **只有 `state` 驗證通過的 callback 才會結束這次 Attempt**，包括成功（帶 `code`）與使用者拒絕（帶 `error`）兩種情況
+  - `state` 不符或缺少參數的請求回 400，listener **繼續等待**，直到收到有效結果或逾時。這樣本機其他程式送來的雜訊請求，無法讓正常的授權提前中斷
 - **A3** Local Credential 只保存 refresh token（與 scope、取得時間）。access token 只放在記憶體。
 - **A4** Local Credential 檔案不會以寬於 `0600` 的權限存在：
   - 目錄權限為 `0700`
@@ -126,7 +129,11 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
   - 讀取時解析目標，並對**目標**套用 R1
 - **R3** 列出時，遞迴深度最多 5 層，總項目數最多 500 筆，用 visited set 防止循環，並處理所有分頁。超過上限時截斷並註明。
 - **R4** 交付給 Claude 的內容都有上限：
-  - 下載 ≤ 20MB（下載前用 `size` 判斷）
+  - 下載 ≤ 20MB，分兩道檢查：
+    - 下載前：有 `size` 中繼資料時先判斷，超過就不下載
+    - 下載中：以串流方式累計收到的位元組，超過 20MB 就立即中止。Google 原生文件的 export 沒有 `size` 可以參考，只能靠這一道
+  - Google 的 export 本身有大小上限，超過時回 `exportSizeLimitExceeded`。這要對應成 Read Limitation，不是 Failure
+  - 所有對外 HTTP 呼叫（Drive、Broker、Google OAuth）都設定 timeout，不讓大型或異常的檔案卡住 MCP server
   - 文字 ≤ 50,000 字
   - PDF 算繪 ≤ 5 頁（整份文件合計）
   - 圖片長邊 ≤ 1568px
@@ -232,6 +239,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | 本機 | `DRIVE_READER_BROKER_URL` | 正式 Broker 網址 |
 | 本機 | `DRIVE_READER_ROOT_FOLDER` | 測試資料夾 `1AU6ZW-3NFxme6388YPe98bGWWh9q_E5Y`（也接受 URL） |
 | 本機 | `DRIVE_READER_CREDENTIALS_PATH` | `~/.config/claude-drive-reader/credentials.json` |
+| 本機 | `DRIVE_READER_CALLBACK_PORT` | 無（由 OS 分配隨機 port）。設定後 loopback listener 改用固定 port，供 SSH port forwarding 使用；必須是 1024–65535 的整數，符合 B2 |
 | Broker | `GOOGLE_CLIENT_ID`、`PUBLIC_BASE_URL` | 無，必填 |
 | Broker | `GOOGLE_CLIENT_SECRET` | 無，必填，來自 Secret Manager |
 
@@ -249,7 +257,8 @@ Failure 代碼如下，代碼與語意都屬於合約：
 ## User Scenarios
 
 1. **首次使用**：使用者說「列出資料夾內的檔案」→ `NOT_AUTHORIZED` → Claude 呼叫 `authorize` → 顯示 URL 並嘗試開啟瀏覽器 → 使用者看到未驗證警告，點「進階」繼續並同意 → 本機頁面顯示「授權完成」→ 使用者說「好了」→ 列出完整子樹。
-2. **瀏覽器無法自動開啟**（SSH、WSL）：同情境 1，但由使用者手動點擊 Claude 顯示的 URL，結果相同。
+2. **瀏覽器無法自動開啟**：前提是瀏覽器和 MCP server 在**同一台機器**上（包括 Windows 搭配 WSL2，因為 WSL2 預設會把 Windows 的 `localhost` 轉送進 WSL）。流程同情境 1，但由使用者手動點擊 Claude 顯示的 URL，結果相同。
+   - **不支援 SSH 遠端**：MCP server 在遠端機器上、瀏覽器在使用者電腦上時，瀏覽器的 `127.0.0.1` 指向使用者電腦，Code Relay 無法抵達遠端的 listener。進階使用者可以設定 `DRIVE_READER_CALLBACK_PORT` 固定 port，再用 `ssh -L <port>:127.0.0.1:<port>` 自行轉送。README 會說明這種用法，但不列入驗收範圍。
 3. **使用者拒絕授權**：本機頁面與 `auth_status` 都顯示「已拒絕」，Local Credential 不變。
 4. **授權逾時**：5 分鐘內沒有完成，listener 自動關閉；`auth_status` 顯示沒有進行中的授權，重新 `authorize` 即可。
 5. **讀取有文字層的 PDF**：回傳文字，超過 50k 字時截斷並註明。
@@ -269,9 +278,10 @@ Failure 代碼如下，代碼與語意都屬於合約：
 ## Implementation Decisions
 
 - **授權流程與 token 存放**：見 ADR 0001。Broker 無狀態，refresh token 存在本機，以 PKCE 綁定發起端，`state` 夾帶 port 以完成 Code Relay。
-- **Broker 技術**：FastAPI。只用 route 與 pydantic，不使用 DI，關閉 `/docs` 與 `/openapi.json`。對外呼叫用 `httpx`。部署在 Cloud Run，與 OAuth Client 同一個 GCP 專案；secret 放在 Secret Manager；使用自訂網域。用一個精簡的 Dockerfile 建置映像檔，以 `uv sync --frozen` 依 `uv.lock` 安裝，確保雲端執行的依賴版本與測試時一致，不依賴 buildpacks 的安裝行為。
+- **Broker 技術**：FastAPI。只用 route 與 pydantic，不使用 DI，關閉 `/docs` 與 `/openapi.json`。對外呼叫用 `httpx`。部署在 Cloud Run，與 OAuth Client 同一個 GCP 專案；secret 放在 Secret Manager；使用自訂網域。用一個精簡的 Dockerfile 建置映像檔，以 `uv sync --locked --no-dev` 安裝：lockfile 和 `pyproject.toml` 不一致時建置直接失敗，確保雲端執行的依賴版本與測試時一致，也不依賴 buildpacks 的安裝行為。
 - **同意畫面**：Production、不送驗證（restricted scope 的驗證需要 CASA，不在範圍內）。README 附警告畫面的說明。
-- **MCP server 技術**：Python 官方 `mcp` SDK（stdio），透過 `uv run --directory ${CLAUDE_PLUGIN_ROOT}` 啟動（`plugin/` 本身就是 Python 專案），依賴版本由 `uv.lock` 鎖定。
+- **MCP server 技術**：Python 官方 `mcp` SDK（stdio），透過 `uv run --frozen --directory ${CLAUDE_PLUGIN_ROOT}` 啟動（`plugin/` 本身就是 Python 專案），依賴版本由 `uv.lock` 鎖定。
+  - **`uv` 指令的分工**：lockfile 是否和 `pyproject.toml` 一致，由 CI 和 Dockerfile 用 `--locked` 在**我們這端**檢查，不一致就失敗。驗收者電腦上的 `.mcp.json` 則用 `--frozen`：照 lockfile 安裝，不重新解析依賴，也不改寫 lockfile，避免在驗收者電腦上才因為檢查失敗而無法啟動。
 - **檔案類型處理**：
   - PDF 用 `pypdfium2` 逐頁處理：有文字的頁面回傳文字，沒有文字的頁面算繪成影像（R4a）
   - 圖片用 Pillow 縮放或轉檔
@@ -311,7 +321,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
     3. 每個 context 內部的分層方向是 `api → app → infra → domain`：上層可以 import 下層，下層不能 import 上層。`app` 直接 import `infra`，依賴關係看得見；`domain` 不 import 任何其他層。
     4. `mcp_server` 可以 import 兩個 context（組裝需要），但兩個 context 都不能 import `mcp_server`。
     5. Token Broker 與 plugin 是不同的部署單元，彼此不 import，只透過 C1 溝通。`state` 格式在兩邊各自實作，由兩邊的合約測試鎖住同一個格式。
-  - repo 根目錄的 `.claude-plugin/marketplace.json` 以 `source: "./plugin"` 指向 plugin，因此驗收者只會安裝 `plugin/`，不會拿到後端程式碼。
+  - repo 根目錄的 `.claude-plugin/marketplace.json` 以 `source: "./plugin"` 指向 plugin，因此 plugin **執行時只使用 `plugin/`**。但加入 marketplace 時會取得整個 repo，而且 repo 交付時會改成 public，所以 `backend/` 的原始碼對任何人都是公開的。這沒有問題：client secret 只存放在部署環境的 Secret Manager，從不進入版本控制。
   - 交付時 repo 改成 public。
 
 ## Recommended Implementation Order
@@ -323,7 +333,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
    - 接受測試資料夾的分享邀請，準備第二個帳號
 
    → 完成後，C1 的外部依賴才存在。
-1. **Token Broker（C1）**：先以測試鎖定 B1–B6，再部署到 Cloud Run 並綁定網域，最後用瀏覽器手動走一次 `/authorize` 到 Google 的流程。
+1. **Token Broker（C1）**：先以測試鎖定 B1–B6，再部署到 Cloud Run、綁定網域、設定 `/callback` 的 Cloud Logging exclusion（B1），最後用瀏覽器手動走一次 `/authorize` 到 Google 的流程，並確認 Cloud Logging 裡沒有 `/callback` 的請求記錄。
 
    → **C1 穩定**，解鎖 Local Authorization。也最早確認同意畫面、網域、未驗證警告的實際行為。
 2. **Plugin 骨架加 Local Authorization（C2，以及 C3 的授權相關 tool）**：
@@ -350,11 +360,11 @@ Failure 代碼如下，代碼與語意都屬於合約：
 |---|---|---|---|
 | Token Broker 內部 | Context | pytest 加 `httpx.MockTransport`：B2 各種惡意 `state`（非數字、超出範圍、夾帶 host 或路徑）、B3 的 422、B1（應用程式 log 不含 token 與 query string）、B6（錯誤頁不回顯參數）、`/authorize` 組出的 URL 參數 | MCP server 測試 |
 | C1 形狀變更 | Contract | Broker 測試，加上 Local Authorization 的 Broker client 測試 | Drive Reading 測試 |
-| Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、`state` 不符、使用者拒絕）、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
+| Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、使用者拒絕；**`state` 不符的請求回 400 且不結束 Attempt，之後的有效 callback 仍能完成授權**）、`DRIVE_READER_CALLBACK_PORT` 固定 port、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
 | Drive Reading：存取與列出 | Context | 假 Drive：R1（含共用雲端硬碟、無法存取的祖先）、R2 捷徑、R3 上限、循環、分頁、404 與 401 的對應 | Broker 測試、Local Authorization 測試 |
-| Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、**混合型 PDF**、PNG、超大圖片、不支援的類型；R4、R4a 上限與頁序、R5 回傳形狀 | 其他所有測試 |
+| Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、**混合型 PDF**、PNG、超大圖片、不支援的類型；R4、R4a 上限與頁序、R5 回傳形狀；**沒有 `size` 的串流超過 20MB 時中止**、`exportSizeLimitExceeded` 對應成 Read Limitation、HTTP timeout | 其他所有測試 |
 | MCP Tool Surface（C3） | Contract | tool 註冊與參數 schema、Failure 格式 `[代碼] … 下一步：…` | 內部 handler 細節（已由 context 測試涵蓋） |
-| 共用或 plugin 打包（`.mcp.json`、`pyproject.toml` 的套件清單、`uv.lock`） | System | 在乾淨環境執行 `uv run` 啟動，確認三個套件都安裝成功，並以 MCP 握手驗證 | — |
+| 共用或 plugin 打包（`.mcp.json`、`pyproject.toml` 的套件清單、`uv.lock`） | System | CI 以 `uv sync --locked` 確認 lockfile 與 `pyproject.toml` 一致；在乾淨環境用和 `.mcp.json` 相同的 `uv run --frozen` 啟動，確認三個套件都安裝成功，並以 MCP 握手驗證 | — |
 | Context 邊界與分層 | System（靜態檢查） | import-linter 依「Repo 形態」的五條規則檢查，每次 push 都執行，成本極低 | — |
 | 交付里程碑 | Release | 在乾淨的 Claude Code 環境照 README 安裝，用第二個帳號跑完 spec 09 的自我驗收清單（情境 1–16，其中情境 16 要等 access token 實際過期後再讀一次），結果記錄在 `docs/` | — |
 
@@ -377,6 +387,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 - restricted scope 的 Google 驗證（CASA）
 - CI 對真實 Drive 的整合測試
 - Broker 的速率限制或濫用防護（列為已知限制）
+- 在 SSH 遠端機器上執行 MCP server（提供 `DRIVE_READER_CALLBACK_PORT` 作為進階用法，但不列入驗收範圍）
 
 ## Assumptions and Open Risks
 
@@ -389,6 +400,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | 5 | `/token` 是公開端點，任何拿到 refresh token 的人都能透過它 refresh | 安全性 | 接受的風險（ADR 0001），寫入架構說明 |
 | 6 | Drive 支援把 Google 文件 export 成 `text/markdown` | 原生格式的讀取 | 步驟 4。不支援時改用 `text/plain` |
 | 7 | 驗收在 2026-11-23 之後的某個時間進行 | Broker、OAuth Client、Production 狀態都必須持續有效 | 交付後不修改 C1，Cloud Run 免費額度足夠 |
-| 8 | 從 GitHub 安裝時，marketplace 的 plugin `source` 可以指向子目錄 `./plugin` | 安裝路徑 | 步驟 2 第一個驗證。不支援時退回 `"./"`，plugin 檔案移回 repo 根目錄 |
+| 8 | 從 GitHub 安裝時，marketplace 的 plugin `source` 可以指向子目錄 `./plugin` | 安裝路徑 | Claude Code 官方文件已列為支援的相對路徑寫法，風險低；仍在步驟 2 第一個實測。不支援時退回 `"./"`，plugin 檔案移回 repo 根目錄 |
 | 9 | 驗收者使用的作業系統和開發機不同（Windows、macOS） | 安裝與執行的穩定性 | CI 三平台矩陣；Windows 權限差異見 A4；`uv`、`pypdfium2`、Pillow 都有三平台的預編譯版本 |
 | 10 | plugin 的最上層套件名稱（`local_authorization`、`drive_reading`、`mcp_server`）和某個依賴的模組同名，互相覆蓋 | import 到錯誤的程式碼 | 每次更新 `uv.lock` 時檢查依賴的最上層模組名稱；`mcp_server` 最通用，若發生衝突就改成更具體的名稱 |
+| 11 | 驗收者在 SSH 遠端機器上執行 Claude Code | 授權無法完成（Code Relay 到不了遠端的 listener） | 不列入驗收範圍。README 在安裝步驟前註明「請在本機執行 Claude Code」，並附上 `DRIVE_READER_CALLBACK_PORT` 加 `ssh -L` 的進階用法 |
