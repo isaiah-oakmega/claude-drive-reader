@@ -282,7 +282,16 @@ Failure 代碼如下，代碼與語意都屬於合約：
   - scope 只有 `drive.readonly`
   - Root Folder 作為存取邊界，防範 prompt injection
   - 帳號 email 用 `about.get` 取得，不額外要求 `email` scope
-- **錯誤模型**：分成 Read Limitation 與 Failure（R5、R6）。Drive 的 404 一律視為無權限的可能。
+- **錯誤模型**：分成 Read Limitation 與 Failure（R5、R6）。Drive 的 404 一律視為無權限的可能。各部分的位置與職責如下：
+  - **定義**：每個 context 在自己的 `domain/errors.py` 定義自己的 Failure，以 exception 表示，只描述發生了什麼。
+    - `local_authorization`：`NotAuthorized`、`AuthExpired`、`BrokerUnreachable`
+    - `drive_reading`：`NotFoundOrNoAccess`、`OutsideRoot`、`NotAFile`、`GoogleApiError`
+  - **Read Limitation 不是例外**：和 `Content` 一起放在 `drive_reading/domain/outcomes.py`，以正常結果回傳。
+  - **翻譯**：`infra/` 負責把技術錯誤（HTTP 狀態碼、連線失敗、Google 的 `invalid_grant`）轉成上述領域例外，`app/` 和 `mcp_server` 都不會看到 HTTP 狀態碼。
+  - **傳遞**：`drive_reading` 不攔截來自 `local_authorization` 的例外，讓它直接往上拋。
+  - **公開**：每個 context 的 `app/__init__.py` 重新匯出自己的例外。外部只從 `app/` import，符合「只能 import 對方 `app/`」的規則。
+  - **格式化**：`mcp_server/failures.py` 是例外對應到 C3 Failure 代碼、訊息與下一步的對照表。`tools.py` 攔截例外後交給它處理。`NOT_FOUND_OR_NO_ACCESS` 的訊息透過 `local_authorization.app` 取得目前帳號的 email。
+  - 已知取捨：`BrokerUnreachable`、`GoogleApiError` 本質上是基礎設施問題，但 app 與 `mcp_server` 都需要辨識它們，所以務實地放在 `domain/errors.py`，不為此另外增加一層。
 - **程式碼風格**（C-2）：
   - 識別字與 commit 用英文
   - 註解用繁中，只寫「為什麼」
