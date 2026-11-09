@@ -33,20 +33,20 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 
 ## Bounded Contexts and Ownership
 
-共三個 context，分屬兩個部署單元：`backend/`（你部署的）與 `plugin/`（使用者安裝的）。MCP tool 層與 plugin 打包屬於 adapter，不另立 context。
+共三個 context，分屬兩個部署單元：`backend/`（你部署的）與 `plugin/`（使用者安裝的）。**每個 context 就是一個以 context 命名的最上層 Python 套件**：`token_broker`、`local_authorization`、`drive_reading`。MCP tool 層與組裝放在 `mcp_server` 套件，它不是 context。
 
-### 1. Token Broker（部署單元：Cloud Run 上的 FastAPI，目錄 `backend/`）
+### 1. Token Broker（部署單元：Cloud Run 上的 FastAPI，套件 `backend/src/token_broker`）
 
 - **職責**：保管 OAuth Client 設定（client_id、client secret、redirect_uri、scope），代表本機完成與 Google token endpoint 之間需要 secret 的互動。
 - **擁有的狀態**：無。只有部署時注入的設定。
-- **擁有的不變式**：見 Domain Rules B1–B5。
+- **擁有的不變式**：見 Domain Rules B1–B6。
 - **不負責**：
   - 保存任何使用者 token 或 code
   - 驗證 `state` 的隨機部分
   - 呼叫 Drive API
   - revoke（本機直接呼叫 Google，因為 revoke 不需要 secret）
 
-### 2. Local Authorization（部署單元：本機 MCP server）
+### 2. Local Authorization（部署單元：本機 MCP server，套件 `plugin/src/local_authorization`）
 
 - **職責**：Authorization Attempt 的生命週期、Local Credential 的保存與刪除、提供有效的 access token。
 - **擁有的狀態**：
@@ -56,7 +56,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 - **擁有的不變式**：見 Domain Rules A1–A6。
 - **不負責**：持有 client secret、組 Google 授權 URL（屬於 Broker）、任何 Drive 讀取邏輯。
 
-### 3. Drive Reading（部署單元：本機 MCP server）
+### 3. Drive Reading（部署單元：本機 MCP server，套件 `plugin/src/drive_reading`）
 
 - **職責**：
   - Root Folder 邊界
@@ -67,10 +67,11 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 - **擁有的不變式**：見 Domain Rules R1–R7。
 - **不負責**：token 的取得與刷新（透過 C2 向 Local Authorization 取得）、授權流程。
 
-### Adapter：MCP Tool Surface 與 Plugin 打包
+### 非 context：`mcp_server`（MCP Tool Surface 與組裝）與 Plugin 打包
 
-- 把 tool 呼叫對應到上述 use case，將 Failure 格式化成 `[代碼] 原因。下一步：…`。
-- 包含 `.claude-plugin/`、`.mcp.json`、`uv` 啟動設定。
+- `mcp_server` 套件是組裝根（composition root）：讀取設定、建立兩個 context 的 app 物件並接在一起、啟動 MCP。
+- 它也是 MCP 入口：把 tool 呼叫交給兩個 context 的 `app/`，並將 Failure 格式化成 `[代碼] 原因。下一步：…`。
+- Plugin 打包包含 `.claude-plugin/`、`.mcp.json`、`uv` 啟動設定。
 - 沒有業務規則。
 
 ## Affected Surfaces
@@ -88,7 +89,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 
 ### Token Broker
 
-- **B1** Broker 不持久化、也不記錄任何 auth code、access token、refresh token。log 只記方法、路徑、狀態碼。
+- **B1** Broker 不持久化任何 auth code、access token、refresh token。**應用程式本身**的 log 只記方法、路徑（不含 query string）、狀態碼；uvicorn 的 access log 要關閉或改成只記路徑。Cloud Run 平台的請求記錄會包含完整網址，因此 `/callback` 的 auth code 可能出現在 Cloud Logging 裡，這無法從程式碼關閉。這是接受的風險：auth code 只能使用一次，而且沒有本機的 PKCE verifier 就無法換到 token。
 - **B2** Code Relay 的目標只能是 `http://127.0.0.1:<port>/callback`：
   - `port` 從 `state` 的 `<port>.<nonce>` 格式解析，必須是 1024–65535 的整數
   - 格式不合時回 400 錯誤頁，不轉址
@@ -99,6 +100,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
   其他一律 422。
 - **B4** 授權請求的 scope 固定為 `https://www.googleapis.com/auth/drive.readonly`，不接受本機指定。
 - **B5** `redirect_uri` 永遠等於 Broker 自己的 `${PUBLIC_BASE_URL}/callback`，`/authorize` 與 `/token` 使用同一個值。
+- **B6** 錯誤頁只依錯誤代碼顯示事先寫好的固定訊息，絕不把請求參數（例如 `state`、`error`）原樣輸出到 HTML，以杜絕反射型 XSS。
 
 ### Local Authorization
 
@@ -172,7 +174,9 @@ Google OAuth ──▶ Token Broker ──C1──▶ Local Authorization ──
 
 ### C2 Access Token Provider（MCP server 內部）
 
-提供者：Local Authorization。消費者：Drive Reading。
+提供者：Local Authorization 的 app 層（`local_authorization.app`）。消費者：Drive Reading 的 app 層。
+
+`drive_reading` 直接 import `local_authorization.app` 取得這個介面，不另外定義 Protocol。實例由 `mcp_server` 建立，透過建構子傳入 `drive_reading` 的 app service，因此測試時可以傳入假的實作。
 
 - `get_access_token() -> str`：
   - 回傳有效 token；距離過期不到 60 秒就先 refresh
@@ -265,9 +269,9 @@ Failure 代碼如下，代碼與語意都屬於合約：
 ## Implementation Decisions
 
 - **授權流程與 token 存放**：見 ADR 0001。Broker 無狀態，refresh token 存在本機，以 PKCE 綁定發起端，`state` 夾帶 port 以完成 Code Relay。
-- **Broker 技術**：FastAPI。只用 route 與 pydantic，不使用 DI，關閉 `/docs` 與 `/openapi.json`。對外呼叫用 `httpx`。部署在 Cloud Run，與 OAuth Client 同一個 GCP 專案；secret 放在 Secret Manager；使用自訂網域。
+- **Broker 技術**：FastAPI。只用 route 與 pydantic，不使用 DI，關閉 `/docs` 與 `/openapi.json`。對外呼叫用 `httpx`。部署在 Cloud Run，與 OAuth Client 同一個 GCP 專案；secret 放在 Secret Manager；使用自訂網域。用一個精簡的 Dockerfile 建置映像檔，以 `uv sync --frozen` 依 `uv.lock` 安裝，確保雲端執行的依賴版本與測試時一致，不依賴 buildpacks 的安裝行為。
 - **同意畫面**：Production、不送驗證（restricted scope 的驗證需要 CASA，不在範圍內）。README 附警告畫面的說明。
-- **MCP server 技術**：Python 官方 `mcp` SDK（stdio），透過 `uv run --directory ${CLAUDE_PLUGIN_ROOT}/mcp-server` 啟動，依賴版本由 `uv.lock` 鎖定。
+- **MCP server 技術**：Python 官方 `mcp` SDK（stdio），透過 `uv run --directory ${CLAUDE_PLUGIN_ROOT}` 啟動（`plugin/` 本身就是 Python 專案），依賴版本由 `uv.lock` 鎖定。
 - **檔案類型處理**：
   - PDF 用 `pypdfium2` 逐頁處理：有文字的頁面回傳文字，沒有文字的頁面算繪成影像（R4a）
   - 圖片用 Pillow 縮放或轉檔
@@ -283,9 +287,16 @@ Failure 代碼如下，代碼與語意都屬於合約：
   - 識別字與 commit 用英文
   - 註解用繁中，只寫「為什麼」
   - 不引入只為了「可能會用到」的抽象層
-- **Repo 形態**：頂層目錄依部署面命名，程式套件依領域命名：
-  - `backend/`：你部署的 Token Broker，套件名稱 `token_broker`。
-  - `plugin/`：使用者安裝的部分，包含 `.claude-plugin/plugin.json`、`.mcp.json`、`mcp-server/`（套件名稱 `drive_reader`）。
+- **Repo 形態**：頂層目錄依部署面命名，Python 套件依 context 命名：
+  - `backend/`：你部署的部分。一個 Python 專案，`src/` 底下只有 `token_broker` 一個套件。
+  - `plugin/`：使用者安裝的部分。`plugin/` 本身就是一個 Python 專案（單一 `pyproject.toml` 與 `uv.lock`），`src/` 底下有三個最上層套件：`local_authorization`、`drive_reading`、`mcp_server`。`pyproject.toml` 的打包設定要明確列出這三個套件。不使用 uv workspace：uv 會把 workspace 成員裝進同一個虛擬環境，各自宣告依賴無法阻止互相 import，換不到額外的強制力。
+  - 每個 context 內部分成三層：`domain/`（純規則，不依賴任何框架或 IO 函式庫，允許 pydantic）、`app/`（use case 與對外公開的 API）、`adapters/`（HTTP、檔案、Google API、PDF 與影像函式庫）。
+  - **context 之間的依賴規則**，以 import-linter 寫在 `pyproject.toml`、由 CI 檢查：
+    1. context 之間只能 import 對方的 `app/`，禁止 import 對方的 `domain/` 與 `adapters/`。
+    2. 方向單向：`drive_reading` 可以 import `local_authorization.app`；`local_authorization` 禁止 import `drive_reading`。
+    3. 每個 context 內部的分層方向是 `adapters → app → domain`。
+    4. `mcp_server` 可以 import 兩個 context（組裝需要），但兩個 context 都不能 import `mcp_server`。
+    5. Token Broker 與 plugin 是不同的部署單元，彼此不 import，只透過 C1 溝通。`state` 格式在兩邊各自實作，由兩邊的合約測試鎖住同一個格式。
   - repo 根目錄的 `.claude-plugin/marketplace.json` 以 `source: "./plugin"` 指向 plugin，因此驗收者只會安裝 `plugin/`，不會拿到後端程式碼。
   - 交付時 repo 改成 public。
 
@@ -298,7 +309,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
    - 接受測試資料夾的分享邀請，準備第二個帳號
 
    → 完成後，C1 的外部依賴才存在。
-1. **Token Broker（C1）**：先以測試鎖定 B1–B5，再部署到 Cloud Run 並綁定網域，最後用瀏覽器手動走一次 `/authorize` 到 Google 的流程。
+1. **Token Broker（C1）**：先以測試鎖定 B1–B6，再部署到 Cloud Run 並綁定網域，最後用瀏覽器手動走一次 `/authorize` 到 Google 的流程。
 
    → **C1 穩定**，解鎖 Local Authorization。也最早確認同意畫面、網域、未驗證警告的實際行為。
 2. **Plugin 骨架加 Local Authorization（C2，以及 C3 的授權相關 tool）**：
@@ -323,16 +334,17 @@ Failure 代碼如下，代碼與語意都屬於合約：
 
 | 變更區域 | 驗證範圍 | 必要測試 | 不需要跑 |
 |---|---|---|---|
-| Token Broker 內部 | Context | pytest 加 `httpx.MockTransport`：B2 各種惡意 `state`（非數字、超出範圍、夾帶 host 或路徑）、B3 的 422、B1（log 不含 token）、`/authorize` 組出的 URL 參數 | MCP server 測試 |
+| Token Broker 內部 | Context | pytest 加 `httpx.MockTransport`：B2 各種惡意 `state`（非數字、超出範圍、夾帶 host 或路徑）、B3 的 422、B1（應用程式 log 不含 token 與 query string）、B6（錯誤頁不回顯參數）、`/authorize` 組出的 URL 參數 | MCP server 測試 |
 | C1 形狀變更 | Contract | Broker 測試，加上 Local Authorization 的 Broker client 測試 | Drive Reading 測試 |
 | Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、`state` 不符、使用者拒絕）、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
 | Drive Reading：存取與列出 | Context | 假 Drive：R1（含共用雲端硬碟、無法存取的祖先）、R2 捷徑、R3 上限、循環、分頁、404 與 401 的對應 | Broker 測試、Local Authorization 測試 |
 | Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、**混合型 PDF**、PNG、超大圖片、不支援的類型；R4、R4a 上限與頁序、R5 回傳形狀 | 其他所有測試 |
 | MCP Tool Surface（C3） | Contract | tool 註冊與參數 schema、Failure 格式 `[代碼] … 下一步：…` | 內部 handler 細節（已由 context 測試涵蓋） |
-| 共用或 plugin 打包（`.mcp.json`、`uv.lock`） | System | 在乾淨環境執行 `uv run` 啟動，並以 MCP 握手驗證 | — |
+| 共用或 plugin 打包（`.mcp.json`、`pyproject.toml` 的套件清單、`uv.lock`） | System | 在乾淨環境執行 `uv run` 啟動，確認三個套件都安裝成功，並以 MCP 握手驗證 | — |
+| Context 邊界與分層 | System（靜態檢查） | import-linter 依「Repo 形態」的五條規則檢查，每次 push 都執行，成本極低 | — |
 | 交付里程碑 | Release | 在乾淨的 Claude Code 環境照 README 安裝，用第二個帳號跑完 spec 09 的自我驗收清單（情境 1–16，其中情境 16 要等 access token 實際過期後再讀一次），結果記錄在 `docs/` | — |
 
-- CI（GitHub Actions）在 push 時，於 **ubuntu、macos、windows 三個平台**執行全部 pytest，不連真實的 Google。credential 權限測試在 Windows 上改為驗證「不宣稱 `0600`」的行為。
+- CI（GitHub Actions）在 push 時，於 **ubuntu、macos、windows 三個平台**執行全部 pytest 與 import-linter，不連真實的 Google。credential 權限測試在 Windows 上改為驗證「不宣稱 `0600`」的行為。
 - 手動 Release 驗收至少在開發機以外的一個作業系統上進行一次。若手邊沒有其他作業系統，就以 CI 的三平台結果為準，並在驗收紀錄中註明。
 - 真實的 Google 流程只在步驟 1、2 完成時，以及 Release 驗收時手動執行。
 
@@ -365,3 +377,4 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | 7 | 驗收在 2026-11-23 之後的某個時間進行 | Broker、OAuth Client、Production 狀態都必須持續有效 | 交付後不修改 C1，Cloud Run 免費額度足夠 |
 | 8 | 從 GitHub 安裝時，marketplace 的 plugin `source` 可以指向子目錄 `./plugin` | 安裝路徑 | 步驟 2 第一個驗證。不支援時退回 `"./"`，plugin 檔案移回 repo 根目錄 |
 | 9 | 驗收者使用的作業系統和開發機不同（Windows、macOS） | 安裝與執行的穩定性 | CI 三平台矩陣；Windows 權限差異見 A4；`uv`、`pypdfium2`、Pillow 都有三平台的預編譯版本 |
+| 10 | plugin 的最上層套件名稱（`local_authorization`、`drive_reading`、`mcp_server`）和某個依賴的模組同名，互相覆蓋 | import 到錯誤的程式碼 | 每次更新 `uv.lock` 時檢查依賴的最上層模組名稱；`mcp_server` 最通用，若發生衝突就改成更具體的名稱 |
