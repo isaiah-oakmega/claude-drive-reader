@@ -1,0 +1,8 @@
+# 只把建置需要的檔案送進 Docker：本機虛擬環境、測試、快取與任何 .env 都不進映像檔
+.venv
+tests
+.pytest_cache
+.import_linter_cache
+**/__pycache__
+.env
+.env.*
