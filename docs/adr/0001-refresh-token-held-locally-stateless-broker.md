@@ -18,10 +18,15 @@ Refresh token 存在使用者本機（`0600` 檔案）。後端是無狀態的 T
 
 後端不持久化、不記錄任何 token。登出時本機刪檔並呼叫 Google revoke。
 
+**後端刻意做薄**：後端只做非它不可的事，也就是保管 client secret 並代為換 token。其他工作都在使用者本機的 MCP server 完成：保存 token、呼叫 Drive API、處理 PDF 與圖片。因此後端不保存任何人的 token，也不經手任何檔案內容。token 在換發與 refresh 時會經過後端，但不會被保存。這是安全取捨，不是功能缺漏。
+
 ## 考慮過的替代方案
 
 - **後端持有 refresh token，本機只拿 session id**：本機被入侵時，session id 與 refresh token 一樣是 bearer credential，沒有降低風險；反而新增「後端被攻破時所有使用者的 token 一起外洩」的最壞情境，也多出 DB、加密金鑰管理、session 管理等攻擊面。唯一優勢是集中撤銷，但 Google revoke 已經涵蓋這點。
-- **Desktop loopback flow，不用後端**：不符合題目「自架後端部署 callback 與 token 交換」的預期。
+- **Desktop 類型的 OAuth Client，不用後端**（loopback + PKCE，本機直接向 Google 換 token）：Google 正式支援這種做法，技術上可行、系統也最簡單。但 Desktop client 換 token 時仍要送出 `client_secret`，Google 將其視為非機密，可以內嵌在程式裡，等於把 secret 放進公開的 repo。拒絕的理由是需求面的：
+  - 出題方來信 C-1 要求「server 以 Django / Flask / FastAPI 任一撰寫」。沒有後端的話，唯一的 server 是以 stdio 執行的 MCP server，不是 web server，這條要求就沒有對象可以滿足。
+  - 原作業的「需自行準備」清單明列「用來部署 OAuth callback 與 token 交換邏輯」的後端，D-2 也要求 README 說明「後端部署方式」。
+- **厚後端：讀取 Drive 也在後端做**（例如以 FastAPI 實作 remote MCP server，部署在雲端）：驗收者不需在本機安裝任何 runtime，C-1 也被滿足得最徹底。但後端必須保存所有使用者的 Google token（與上一個方案的缺點相同），檔案內容會經過後端，而且要額外實作 MCP 授權規格，讓後端同時扮演 Claude Code 的 OAuth 授權伺服器與 Google 的 OAuth client。程式碼量約多一倍，兩週內風險過高。
 
 ## 後果
 

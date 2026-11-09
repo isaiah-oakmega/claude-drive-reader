@@ -33,9 +33,9 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 
 ## Bounded Contexts and Ownership
 
-共三個 context，分屬兩個部署單元。MCP tool 層與 plugin 打包屬於 adapter，不另立 context。
+共三個 context，分屬兩個部署單元：`backend/`（你部署的）與 `plugin/`（使用者安裝的）。MCP tool 層與 plugin 打包屬於 adapter，不另立 context。
 
-### 1. Token Broker（部署單元：Cloud Run 上的 FastAPI）
+### 1. Token Broker（部署單元：Cloud Run 上的 FastAPI，目錄 `backend/`）
 
 - **職責**：保管 OAuth Client 設定（client_id、client secret、redirect_uri、scope），代表本機完成與 Google token endpoint 之間需要 secret 的互動。
 - **擁有的狀態**：無。只有部署時注入的設定。
@@ -279,7 +279,11 @@ Failure 代碼如下，代碼與語意都屬於合約：
   - 識別字與 commit 用英文
   - 註解用繁中，只寫「為什麼」
   - 不引入只為了「可能會用到」的抽象層
-- **Repo 形態**：repo 同時是 marketplace 與 plugin（`source: "./"`），交付時改成 public。
+- **Repo 形態**：頂層目錄依部署面命名，程式套件依領域命名：
+  - `backend/`：你部署的 Token Broker，套件名稱 `token_broker`。
+  - `plugin/`：使用者安裝的部分，包含 `.claude-plugin/plugin.json`、`.mcp.json`、`mcp-server/`（套件名稱 `drive_reader`）。
+  - repo 根目錄的 `.claude-plugin/marketplace.json` 以 `source: "./plugin"` 指向 plugin，因此驗收者只會安裝 `plugin/`，不會拿到後端程式碼。
+  - 交付時 repo 改成 public。
 
 ## Recommended Implementation Order
 
@@ -354,3 +358,4 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | 5 | `/token` 是公開端點，任何拿到 refresh token 的人都能透過它 refresh | 安全性 | 接受的風險（ADR 0001），寫入架構說明 |
 | 6 | Drive 支援把 Google 文件 export 成 `text/markdown` | 原生格式的讀取 | 步驟 4。不支援時改用 `text/plain` |
 | 7 | 驗收在 2026-11-23 之後的某個時間進行 | Broker、OAuth Client、Production 狀態都必須持續有效 | 交付後不修改 C1，Cloud Run 免費額度足夠 |
+| 8 | 從 GitHub 安裝時，marketplace 的 plugin `source` 可以指向子目錄 `./plugin` | 安裝路徑 | 步驟 2 第一個驗證。不支援時退回 `"./"`，plugin 檔案移回 repo 根目錄 |
