@@ -142,3 +142,4 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 | C3 授權相關 tool | `test_tools.py`：三個 tool 沒有必填參數、描述有中文；`authorize` 回傳網址、未驗證警告的操作與「完成後告訴我」；`auth_status` 四種上一次結果；Failure 格式 `[代碼] 原因。下一步：…` | ✅ |
 | 打包與啟動 | `test_stdio_server.py`：以 `python -m mcp_server` 透過 stdio 握手，列出三個 tool，且不建立 credential 檔；設定錯誤時以非 0 結束，訊息只寫到 stderr | ✅ |
 | 開瀏覽器不污染 MCP 的 stdout | `test_browser.py`：子程序的 stdin、stdout、stderr 都導到 DEVNULL；找不到開啟程式或啟動失敗時回 False | ✅ |
+| 三平台 CI | GitHub Actions run #42827892715（`phase-2-local-auth` 的 `eba44f9`）：backend 與 plugin × ubuntu、macos、windows | ✅ 6/6 success |
