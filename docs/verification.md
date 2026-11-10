@@ -143,3 +143,15 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 | 打包與啟動 | `test_stdio_server.py`：以 `python -m mcp_server` 透過 stdio 握手，列出三個 tool，且不建立 credential 檔；設定錯誤時以非 0 結束，訊息只寫到 stderr | ✅ |
 | 開瀏覽器不污染 MCP 的 stdout | `test_browser.py`：子程序的 stdin、stdout、stderr 都導到 DEVNULL；找不到開啟程式或啟動失敗時回 False | ✅ |
 | 三平台 CI | GitHub Actions run #42827892715（`phase-2-local-auth` 的 `eba44f9`）：backend 與 plugin × ubuntu、macos、windows | ✅ 6/6 success |
+
+## Repo 提前公開：歷史掃描
+
+2026-11-10 repo 提前改成 public（原計畫在階段 8），讓 Windows 測試從 GitHub 安裝時不必另外設定 GitHub 登入。公開後立即掃描所有分支的完整歷史（32 個 commit）：
+
+| 項目 | 方法 | 結果 |
+|---|---|---|
+| secret 與 token | 在所有 commit 的 diff 中搜尋 Google client secret（`GOCSPX`）、access token（`ya29.`）、refresh token（`1//0`）、授權碼（`4/0`）、私鑰、GitHub token 的格式 | ✅ 沒有真實值。命中的只有 `uv.lock` 套件網址中的雜湊值與測試用的假值 |
+| 個人資料 | 搜尋每個 commit 的檔案內容中的 email、OAuth Client ID、GCP 專案名稱、開發用資料夾 ID | ✅ 只有範例 email（`example.com` 等） |
+| commit 的作者資訊 | `git log --all --format='%ae %ce'` | commit 的作者與提交者 email 是開發者的個人信箱。改寫歷史會讓所有 commit hash 改變，本文件與 CI 紀錄引用的 commit 對不上，對作業沒有好處，因此保留 |
+
+階段 8 交付前，會再掃描這之後新增的 commit。
