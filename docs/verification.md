@@ -155,7 +155,7 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 | 情境 15：`logout` 回報已向 Google 撤銷、本機授權已刪除 → `auth_status` 顯示尚未授權 | Linux | 主帳號 | ✅ 2026-11-10 |
 | Production 狀態下用第二帳號完成授權，`auth_status` 顯示第二帳號的 email | Linux | 第二帳號 | ✅ 2026-11-10 |
 | 情境 4：開始授權後不完成，5 分鐘後 `auth_status` 顯示沒有進行中的授權、上一次結果「逾時」 | Linux | — | ✅ 2026-11-10 |
-| A4：真實授權後的 `credentials.json` 權限為 `0600`、目錄為 `0700`，檔案只有 `refresh_token`、`scope`、`obtained_at` | Linux | — | 目錄 `0700` ✅（登出後只剩目錄）；檔案待下一次授權後檢查 |
+| A4：真實授權後的 `credentials.json` 權限為 `0600`、目錄為 `0700`，檔案只有 `refresh_token`、`scope`、`obtained_at` | Linux | 主帳號 | ✅ 2026-11-10 15:20 UTC：檔案 `600`、目錄 `700`、擁有者為使用者本人；欄位只有這三個，scope 為 `drive.readonly`，沒有 access token。檢查時只看欄位名稱與格式，不印出 token |
 | Windows 煙霧測試：PowerShell 安裝 uv 與 Claude Code → `claude plugin install drive-reader --marketplace "isaiah-oakmega/claude-drive-reader#phase-2-local-auth"` → `/mcp` 數秒內 connected → 授權成功，`auth_status` 顯示正確的 email，授權保存在 `C:\Users\<使用者>\.config\claude-drive-reader\credentials.json` | Windows（Claude Code CLI） | 主帳號 | ✅ 2026-11-10 |
 
 觀察：
