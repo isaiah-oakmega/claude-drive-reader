@@ -227,6 +227,9 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | `NOT_A_FILE` | 傳入的是資料夾 |
 | `BROKER_UNREACHABLE` | 連不到 Broker |
 | `GOOGLE_API_ERROR` | Google API 錯誤 |
+| `CALLBACK_PORT_UNAVAILABLE` | `DRIVE_READER_CALLBACK_PORT` 指定的 port 無法使用（已被其他程式占用），`authorize` 無法開始 |
+
+`CALLBACK_PORT_UNAVAILABLE` 只會在設定固定 port 時發生。預設由 OS 分配沒人使用的 port，不會遇到。
 
 破壞性變更：tool 名稱、必填參數、Failure 代碼語意。
 
@@ -306,7 +309,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
   - 帳號 email 用 `about.get` 取得，不額外要求 `email` scope
 - **錯誤模型**：分成 Read Limitation 與 Failure（R5、R6）。Drive 的 404 一律視為無權限的可能。各部分的位置與職責如下：
   - **定義**：每個 context 在自己的 `domain/errors.py` 定義自己的 Failure，以 exception 表示，只描述發生了什麼。
-    - `local_authorization`：`NotAuthorized`、`AuthExpired`、`BrokerUnreachable`
+    - `local_authorization`：`NotAuthorized`、`AuthExpired`、`BrokerUnreachable`，以及只在 `authorize` 時發生、不屬於 C2 的 `CallbackPortUnavailable`
     - `drive_reading`：`NotFoundOrNoAccess`、`OutsideRoot`、`NotAFile`、`GoogleApiError`
   - **Read Limitation 不是例外**：和 `Content` 一起放在 `drive_reading/domain/outcomes.py`，以正常結果回傳。
   - **翻譯**：`infra/` 負責把技術錯誤（HTTP 狀態碼、連線失敗、Google 的 `invalid_grant`）轉成上述領域例外，`app/` 和 `mcp_server` 都不會看到 HTTP 狀態碼。
