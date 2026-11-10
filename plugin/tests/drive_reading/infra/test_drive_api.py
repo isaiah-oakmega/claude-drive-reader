@@ -5,7 +5,7 @@ import pytest
 
 from drive_reading.domain.drive_item import FOLDER_MIME, SHORTCUT_MIME, DriveItem
 from drive_reading.domain.errors import GoogleApiError, NotFoundOrNoAccess
-from drive_reading.infra.drive_api import DriveApi
+from drive_reading.infra.drive_api import DownloadTooLarge, DriveApi, ExportTooLarge
 from local_authorization.app import NotAuthorized
 
 FOLDER = DriveItem(id="folder-id", name="Root", mime_type=FOLDER_MIME)
@@ -221,3 +221,64 @@ def test_malformed_success_response_is_a_google_api_error() -> None:
 
     with pytest.raises(GoogleApiError):
         api_for(drive).get_item("file-id")
+
+
+# ---------- 下載與匯出（R4：串流累計，超過上限立即中止） ----------
+
+
+def test_download_streams_file_content() -> None:
+    drive = FakeDrive(httpx2.Response(200, content=b"%PDF-1.4 bytes"))
+
+    data = api_for(drive).download("file-id", max_bytes=1024)
+
+    assert data == b"%PDF-1.4 bytes"
+    params = drive.requests[0].url.params
+    assert (params["alt"], params["supportsAllDrives"]) == ("media", "true")
+
+
+def test_download_over_limit_is_aborted() -> None:
+    drive = FakeDrive(httpx2.Response(200, content=b"x" * 2048))
+
+    with pytest.raises(DownloadTooLarge):
+        api_for(drive).download("file-id", max_bytes=1024)
+
+
+def test_export_requests_target_format() -> None:
+    drive = FakeDrive(httpx2.Response(200, content="# 標題".encode()))
+
+    data = api_for(drive).export("doc-id", "text/markdown", max_bytes=1024)
+
+    request = drive.requests[0]
+    assert str(request.url).startswith("https://www.googleapis.com/drive/v3/files/doc-id/export?")
+    assert request.url.params["mimeType"] == "text/markdown"
+    assert data == "# 標題".encode()
+
+
+def test_export_size_limit_from_google_is_reported() -> None:
+    body = {"error": {"code": 403, "message": "This file is too large to be exported.", "errors": [{"reason": "exportSizeLimitExceeded"}]}}
+    drive = FakeDrive(httpx2.Response(403, json=body))
+
+    with pytest.raises(ExportTooLarge):
+        api_for(drive).export("doc-id", "text/markdown", max_bytes=1024)
+
+
+def test_export_without_size_is_capped_while_streaming() -> None:
+    # Google 原生文件沒有 size 可以先判斷，只能靠下載中的累計（R4 第二道檢查）
+    drive = FakeDrive(httpx2.Response(200, content=b"y" * 4096))
+
+    with pytest.raises(DownloadTooLarge):
+        api_for(drive).export("doc-id", "text/csv", max_bytes=1024)
+
+
+def test_download_of_missing_file_is_not_found() -> None:
+    with pytest.raises(NotFoundOrNoAccess):
+        api_for(FakeDrive(httpx2.Response(404))).download("gone-id", max_bytes=1024)
+
+
+def test_download_is_retried_on_transient_errors_and_401() -> None:
+    sleeps: list[float] = []
+    tokens = FakeTokens()
+    drive = FakeDrive(httpx2.Response(401), httpx2.Response(503), httpx2.Response(200, content=b"ok"))
+
+    assert api_for(drive, tokens, sleeps).download("file-id", max_bytes=1024) == b"ok"
+    assert (tokens.invalidated, sleeps) == (1, [1.0])
