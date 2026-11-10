@@ -264,6 +264,7 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 | 故意製造錯誤：lockfile 與 `pyproject.toml` 不一致 | ✅ run #42850247899（暫時分支 `ci-negative-check`）：三個平台的 plugin job 都在 Install dependencies 失敗，訊息為 `The lockfile at uv.lock needs to be updated, but --locked was provided`；`package` job 照常通過，符合預期（`--frozen` 只照 lockfile 安裝） |
 | 故意製造錯誤：違反依賴規則 | ✅ run #42850283403（暫時分支 `ci-negative-imports`，只讓 `drive_reading.domain.limits` import `local_authorization.infra`）：ubuntu 與 windows 的 plugin job 在 Check dependency rules 失敗，訊息為 `Drive Reading reaches Local Authorization only through app/ BROKEN`；macOS job 排隊等不到 runner，已取消。兩個暫時分支在檢查後刪除 |
 | 三平台 CI（階段 3–7 完成後） | ✅ run #42851380179（`31cd403`）：9/9 success，包含三個平台的 `package` job |
+| 三平台 CI（階段 3–7 合併進 main 後） | ✅ run #42860321596（`f111bd8`）：9/9 success |
 
 觀察：GitHub 的 macOS runner 有時排隊超過 15 分鐘後被取消，job 一個步驟都沒有執行（runner_name 為空）。這是 GitHub 端的容量問題，不是測試失敗；同一個 commit 的其他平台都通過。
 
@@ -324,6 +325,7 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 
 - [ ] 收到出題方資料夾的分享邀請（2026-11-20 前沒收到就寫信詢問）
 - [ ] 移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，改用預設的出題方資料夾
+- [ ] 第二帳號授權時截下「Google 尚未驗證這個應用程式」警告與「進階」展開後的畫面，放進 README「快速開始」第 3 步（實作規格的 Release 步驟要求截圖；README 目前只有文字說明）
 - [ ] 乾淨環境照 README 從 repo 安裝，用第二帳號跑完情境 1–16（情境 16 要實際等 access token 過期）
 - [ ] Windows：情境 1、6、7、8、11、15
 - [ ] 再掃描一次 2026-11-10 之後新增的 commit，確認沒有 secret 或個人資料
