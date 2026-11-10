@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from drive_reading.app import NotFoundOrNoAccess, parse_drive_id
-from local_authorization.domain.limits import MAX_CALLBACK_PORT, MIN_CALLBACK_PORT
+from local_authorization.app import MAX_CALLBACK_PORT, MIN_CALLBACK_PORT
 
 DEFAULT_BROKER_URL = "https://drive-auth.isaiahlin.dev"
 # 出題方提供的測試資料夾。開發時用 DRIVE_READER_ROOT_FOLDER 指到自己的資料夾

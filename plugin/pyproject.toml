@@ -73,3 +73,17 @@ name = "Contexts do not depend on mcp_server"
 type = "forbidden"
 source_modules = ["local_authorization", "drive_reading"]
 forbidden_modules = ["mcp_server"]
+
+# 規則 4 的延伸：mcp_server 的 tool、錯誤格式、設定只經過 context 的 app/。
+# 只有組裝根 mcp_server.__main__ 需要建立 infra 物件，不在這條規則內。
+[[tool.importlinter.contracts]]
+name = "mcp_server reaches contexts only through app/ (except the composition root)"
+type = "forbidden"
+source_modules = ["mcp_server.tools", "mcp_server.failures", "mcp_server.config"]
+forbidden_modules = [
+    "local_authorization.domain",
+    "local_authorization.infra",
+    "drive_reading.domain",
+    "drive_reading.infra",
+]
+allow_indirect_imports = true

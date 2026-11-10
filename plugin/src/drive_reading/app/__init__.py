@@ -4,19 +4,54 @@ from drive_reading.app.drive_reading_service import DriveReadingService, FileRea
 from drive_reading.domain.drive_id import parse_drive_id
 from drive_reading.domain.drive_item import DriveItem
 from drive_reading.domain.errors import DriveReadingError, GoogleApiError, NotAFile, NotFoundOrNoAccess, OutsideRoot
+from drive_reading.domain.limits import MAX_DOWNLOAD_BYTES, MAX_IMAGE_SIDE, MAX_LIST_DEPTH, MAX_LIST_ITEMS
 from drive_reading.domain.listing import ListedEntry, Listing
+from drive_reading.domain.outcomes import (
+    Content,
+    FirstFrameOnly,
+    FirstSheetOnly,
+    ImagePart,
+    ImageResized,
+    LimitationReason,
+    Note,
+    NoTextLayer,
+    PagesOmitted,
+    PagesRendered,
+    ReadLimitation,
+    TextPart,
+    TextTruncated,
+    UndecodableCharacters,
+)
 
 __all__ = [
+    "Content",
     "DriveItem",
     "DriveReadingError",
     "DriveReadingService",
     "FileRead",
+    "FirstFrameOnly",
+    "FirstSheetOnly",
     "FolderListing",
     "GoogleApiError",
+    "ImagePart",
+    "ImageResized",
+    "LimitationReason",
     "ListedEntry",
     "Listing",
+    "MAX_DOWNLOAD_BYTES",
+    "MAX_IMAGE_SIDE",
+    "MAX_LIST_DEPTH",
+    "MAX_LIST_ITEMS",
     "NotAFile",
+    "Note",
+    "NoTextLayer",
     "NotFoundOrNoAccess",
     "OutsideRoot",
+    "PagesOmitted",
+    "PagesRendered",
     "parse_drive_id",
+    "ReadLimitation",
+    "TextPart",
+    "TextTruncated",
+    "UndecodableCharacters",
 ]

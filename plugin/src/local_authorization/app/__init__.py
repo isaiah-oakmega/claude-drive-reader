@@ -16,18 +16,21 @@ from local_authorization.domain.errors import (
     CallbackPortUnavailable,
     NotAuthorized,
 )
+from local_authorization.domain.limits import MAX_CALLBACK_PORT, MIN_CALLBACK_PORT
 
 __all__ = [
     "AccessTokenProvider",
     "AttemptResult",
     "AuthExpired",
-    "AuthStatus",
     "AuthorizationError",
     "AuthorizationService",
     "AuthorizationStarted",
+    "AuthStatus",
     "BrokerUnreachable",
     "CallbackPortUnavailable",
     "LogoutReport",
+    "MAX_CALLBACK_PORT",
+    "MIN_CALLBACK_PORT",
     "NotAuthorized",
     "RevokeOutcome",
 ]
