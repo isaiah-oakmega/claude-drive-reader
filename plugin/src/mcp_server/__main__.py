@@ -16,7 +16,7 @@ from local_authorization.infra.credential_store import CredentialStore
 from local_authorization.infra.google_account import GoogleAccount
 from local_authorization.infra.google_revoke import GoogleRevoker
 from local_authorization.infra.http_client import new_http_client
-from mcp_server import spike, tools
+from mcp_server import tools
 from mcp_server.config import Config, InvalidConfig
 
 
@@ -36,8 +36,6 @@ def build_server(config: Config) -> MCPServer:
 
     server = MCPServer("drive-reader")
     tools.register_authorization_tools(server, authorization)
-    # SPIKE：只為了實測風險 #1、#4、#8，階段 2 結束前連同 spike.py 一起移除。
-    spike.register(server)
     return server
 
 

@@ -23,7 +23,8 @@ def test_server_starts_over_stdio_and_lists_authorization_tools(tmp_path: Path) 
 
     names = anyio.run(list_tool_names, env)
 
-    assert {"authorize", "auth_status", "logout"} <= set(names)
+    # 只有正式的 tool；階段 2 的 spike_image 已經移除
+    assert sorted(names) == ["auth_status", "authorize", "logout"]
     assert not (tmp_path / "credentials.json").exists()
 
 

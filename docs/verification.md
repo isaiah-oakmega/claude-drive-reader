@@ -144,6 +144,25 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 | 開瀏覽器不污染 MCP 的 stdout | `test_browser.py`：子程序的 stdin、stdout、stderr 都導到 DEVNULL；找不到開啟程式或啟動失敗時回 False | ✅ |
 | 三平台 CI | GitHub Actions run #42827892715（`phase-2-local-auth` 的 `eba44f9`）：backend 與 plugin × ubuntu、macos、windows | ✅ 6/6 success |
 
+### 真實驗收
+
+plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式的 Broker 與 Google。授權相關的 tool 在 Claude Code 中以自然語言觸發（「幫我授權 Google Drive」「授權狀態如何？」「登出」）。
+
+| 項目 | 平台 | 帳號 | 結果 |
+|---|---|---|---|
+| 情境 1：首次授權。`authorize` 回傳網址並自動開啟瀏覽器 → 未驗證警告 → 同意 → 本機頁面「授權完成」→ `auth_status` 顯示已授權、正確的 email、上一次結果「成功」 | Linux（Claude Desktop 的 Code tab） | 主帳號 | ✅ 2026-11-10 |
+| 情境 3：在 Google 同意頁面按「取消」→ 本機頁面「已拒絕授權」→ `auth_status` 上一次結果「已拒絕」，原本的授權仍在 | Linux | 主帳號 | ✅ 2026-11-10 |
+| 情境 15：`logout` 回報已向 Google 撤銷、本機授權已刪除 → `auth_status` 顯示尚未授權 | Linux | 主帳號 | ✅ 2026-11-10 |
+| Production 狀態下用第二帳號完成授權，`auth_status` 顯示第二帳號的 email | Linux | 第二帳號 | ✅ 2026-11-10 |
+| 情境 4：開始授權後不完成，5 分鐘後 `auth_status` 顯示沒有進行中的授權、上一次結果「逾時」 | Linux | — | 待測 |
+| A4：真實授權後的 `credentials.json` 權限為 `0600`、目錄為 `0700`，檔案只有 `refresh_token`、`scope`、`obtained_at` | Linux | — | 目錄 `0700` ✅（登出後只剩目錄）；檔案待下一次授權後檢查 |
+| Windows 煙霧測試：PowerShell 安裝 uv 與 Claude Code → `claude plugin install drive-reader --marketplace "isaiah-oakmega/claude-drive-reader#phase-2-local-auth"` → `/mcp` 數秒內 connected → 授權成功，`auth_status` 顯示正確的 email，授權保存在 `C:\Users\<使用者>\.config\claude-drive-reader\credentials.json` | Windows（Claude Code CLI） | 主帳號 | ✅ 2026-11-10 |
+
+觀察：
+- Windows 上的 Claude Code CLI 安裝程式不會自己修改 PATH。uv 的安裝程式會把同一個 `%USERPROFILE%\.local\bin` 加進使用者 PATH，所以先裝 uv 再裝 Claude Code 時，不需要另外設定。README 的 Windows 步驟要寫明這個順序，並附上 PATH 沒設定時的處理方式。
+- Claude 會把 tool 的回傳整理成摘要再呈現，不一定逐字顯示。Windows 上 `auth_status` 對檔案保護方式的描述（不宣稱 0600）由 mock 測試涵蓋，CI 的 Windows job 也有跑。
+- 階段 2 結束時移除了暫時的 `spike_image` tool；stdio 握手測試改為確認只提供 `authorize`、`auth_status`、`logout` 三個 tool。
+
 ## Repo 提前公開：歷史掃描
 
 2026-11-10 repo 提前改成 public（原計畫在階段 8），讓 Windows 測試從 GitHub 安裝時不必另外設定 GitHub 登入。公開後立即掃描所有分支的完整歷史（32 個 commit）：
