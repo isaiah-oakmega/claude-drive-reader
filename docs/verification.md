@@ -97,3 +97,23 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 觀察：
 - 未驗證的 app 在 Google 的畫面上顯示的是網域 `isaiahlin.dev`，不是設定的 app 名稱。README 的警告畫面說明要照實際畫面寫。
 - 發布之後，Testing 狀態下「refresh token 7 天失效」的限制就不再適用（計畫的 X2）。發布前取得的 credential 需要重新授權。
+
+| 項目 | 方法 | 結果 |
+|---|---|---|
+| 三平台 CI | GitHub Actions run #42803651798（`main` 的 `e573e1f`，含 `/health` 修正） | ✅ 6/6 success |
+
+## 階段 2：Plugin 骨架與 Local Authorization
+
+### Spike（本階段最先做）
+
+暫時性的 `spike_image` tool 回傳一張 96×48 的 PNG，由三條直條組成。顏色故意不寫在 tool 描述裡，模型只能從圖片本身得知。spike 的程式在階段 2 結束前移除。
+
+| 風險 | 方法 | 結果 |
+|---|---|---|
+| #8：從 GitHub 安裝子目錄 `./plugin` | `claude plugin marketplace add isaiah-oakmega/claude-drive-reader#phase-2-local-auth`，再 `claude plugin install drive-reader@drive-reader-marketplace` | ✅ 2026-11-10 Linux，Claude Code 2.1.317：repo 還是 private，Claude Code 先確認 SSH key 可用，改用 SSH clone；marketplace 加入成功，plugin 裝在 user scope 且為 enabled。從安裝後的副本（`~/.claude/plugins/cache/…`）啟動 MCP server，1.4 秒完成握手 |
+| #1：MCP tool 回傳的圖片會交給模型 | 在新的 Claude Code session（Desktop 的 Code tab）要求呼叫 `spike_image` 並說出顏色 | ✅ 2026-11-10：模型回答由左到右為黃、黑、洋紅，和圖片一致 |
+| #4：`uv run --frozen` 第一次啟動的耗時 | 暫時的握手腳本照 `.mcp.json` 啟動 MCP server，量從啟動子程序到 `initialize` 完成的時間。冷：uv 快取與 Python 安裝目錄都指向全新的空目錄；熱：用現有的快取 | 2026-11-10 Linux：冷啟動 4.2 秒（含下載約 104MB 的 Python 3.12 與 29 個套件，實際時間取決於頻寬），熱啟動 1.2 秒。Windows 的數字在煙霧測試時補上 |
+
+觀察：
+- Claude Desktop 的 Code tab 沒有 `/plugin` 指令，改用 prompt 框旁的 **+** → **Add plugins** 開 plugin 瀏覽器，但它只列出已經加入的 marketplace，不能從 GitHub 加入新的 marketplace。同一台電腦上的 Desktop 和終端機版共用同一份設定檔，所以在終端機執行 `claude plugin marketplace add` 與 `claude plugin install` 後，Desktop 新開的 session 就會載入。README 要寫明這一點。
+- plugin 只在 session 啟動時載入，裝好後要開新的 session。
