@@ -1,0 +1,30 @@
+{
+  "_comment": "C1 的 state 格式合約：<port>.<nonce>。port 為 1024–65535 的十進位整數（不得有前導零）；nonce 為 16–128 個 base64url 字元。plugin 的測試使用同一份內容，兩邊必須保持一致（實作規格「Repo 形態」規則 5）。",
+  "valid": [
+    {"state": "1024.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "port": 1024},
+    {"state": "65535.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "port": 65535},
+    {"state": "53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "port": 53682},
+    {"state": "53682.abcdefghijklmnop", "port": 53682},
+    {"state": "53682.A-_b-_c-_d-_e-_f-_g-_", "port": 53682}
+  ],
+  "invalid": [
+    {"state": "", "why": "empty"},
+    {"state": "53682", "why": "no nonce"},
+    {"state": "53682.", "why": "empty nonce"},
+    {"state": ".Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "no port"},
+    {"state": "1023.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "port below 1024"},
+    {"state": "65536.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "port above 65535"},
+    {"state": "99999.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "port above 65535"},
+    {"state": "01024.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "leading zero"},
+    {"state": "-1.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "negative port"},
+    {"state": "abc.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "non-numeric port"},
+    {"state": "５３６８２.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "full-width digits"},
+    {"state": "53682.short", "why": "nonce too short"},
+    {"state": "53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s@evil.example", "why": "host injection"},
+    {"state": "evil.example:53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s", "why": "host prefix"},
+    {"state": "53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s/../x", "why": "path in nonce"},
+    {"state": "53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s.extra", "why": "extra segment"},
+    {"state": "53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s\n", "why": "trailing newline"},
+    {"state": "53682.Jq3vX8bT2mN5pR7sW9yZ1aC4dE6fG0hK2lM4nP6qR8s<script>", "why": "markup"}
+  ]
+}
