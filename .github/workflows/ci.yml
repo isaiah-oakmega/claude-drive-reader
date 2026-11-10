@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+# 同一個分支有新的 push 時，取消還在跑或排隊的舊 run：只有最新的 commit 需要結果，
+# 也避免 macOS runner 不足時舊 run 佔著排隊位置
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: ${{ matrix.project }} on ${{ matrix.os }}
