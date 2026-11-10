@@ -9,19 +9,22 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
+from drive_reading.app import DriveReadingService
+from drive_reading.infra import http_client as drive_http
+from drive_reading.infra.drive_api import DriveApi
 from local_authorization.app import AccessTokenProvider, AuthorizationService
 from local_authorization.infra import browser
 from local_authorization.infra.broker_client import BrokerClient
 from local_authorization.infra.credential_store import CredentialStore
 from local_authorization.infra.google_account import GoogleAccount
 from local_authorization.infra.google_revoke import GoogleRevoker
-from local_authorization.infra.http_client import new_http_client
+from local_authorization.infra import http_client as auth_http
 from mcp_server import tools
 from mcp_server.config import Config, InvalidConfig
 
 
 def build_server(config: Config) -> MCPServer:
-    http = new_http_client()
+    http = auth_http.new_http_client()
     store = CredentialStore(config.credentials_path)
     broker = BrokerClient(config.broker_url, http)
     token_provider = AccessTokenProvider(store=store, broker=broker, account=GoogleAccount(http))
@@ -34,8 +37,12 @@ def build_server(config: Config) -> MCPServer:
         callback_port=config.callback_port,
     )
 
+    # C2：Drive Reading 拿到的是 token provider，不知道 token 從哪裡來
+    drive = DriveReadingService(DriveApi(drive_http.new_http_client(), token_provider), config.root_folder)
+
     server = MCPServer("drive-reader")
     tools.register_authorization_tools(server, authorization)
+    tools.register_drive_tools(server, drive, account=token_provider.current_account)
     return server
 
 

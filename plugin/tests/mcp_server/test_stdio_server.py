@@ -17,14 +17,14 @@ async def list_tool_names(env: dict[str, str]) -> list[str]:
         return [tool.name for tool in (await session.list_tools()).tools]
 
 
-def test_server_starts_over_stdio_and_lists_authorization_tools(tmp_path: Path) -> None:
+def test_server_starts_over_stdio_and_lists_tools(tmp_path: Path) -> None:
     # 啟動不需要網路，也不會建立 credential 檔
     env = dict(os.environ, DRIVE_READER_CREDENTIALS_PATH=str(tmp_path / "credentials.json"))
 
     names = anyio.run(list_tool_names, env)
 
     # 只有正式的 tool；階段 2 的 spike_image 已經移除
-    assert sorted(names) == ["auth_status", "authorize", "logout"]
+    assert sorted(names) == ["auth_status", "authorize", "list_files", "logout"]
     assert not (tmp_path / "credentials.json").exists()
 
 

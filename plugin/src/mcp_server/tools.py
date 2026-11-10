@@ -1,11 +1,13 @@
 """C3 的 MCP tools。這裡只做轉接與格式化：參數交給 context 的 app/，結果轉成給 Claude 看的繁中文字。"""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from drive_reading.app import DriveItem, DriveReadingService, FolderListing
+from drive_reading.domain.limits import MAX_LIST_DEPTH, MAX_LIST_ITEMS
 from local_authorization.app import AttemptResult, AuthorizationService, AuthStatus, LogoutReport, RevokeOutcome
 from mcp_server.failures import KNOWN_FAILURES, failure_text
 
@@ -27,12 +29,12 @@ _REVOKE_LABELS = {
 
 
 @contextmanager
-def _failures_as_tool_errors() -> Iterator[None]:
+def _failures_as_tool_errors(account: Callable[[], str | None] = lambda: None) -> Iterator[None]:
     # ToolError 讓 MCP 回 is_error=True 並把文字交給 Claude；其他例外維持原樣，由 SDK 當成 crash 處理
     try:
         yield
     except KNOWN_FAILURES as error:
-        raise ToolError(failure_text(error)) from error
+        raise ToolError(failure_text(error, account)) from error
 
 
 def register_authorization_tools(server: MCPServer, auth: AuthorizationService) -> None:
@@ -104,3 +106,77 @@ def _describe_logout(report: LogoutReport) -> str:
         return "目前沒有授權，不需要登出。"
     deleted = "本機保存的授權已刪除" if report.deleted else "本機保存的授權已不存在（可能已被其他視窗刪除）"
     return f"已登出：{_REVOKE_LABELS[report.revoke]}；{deleted}。"
+
+
+# ---------- Drive Reading ----------
+
+
+def register_drive_tools(server: MCPServer, drive: DriveReadingService, account: Callable[[], str | None]) -> None:
+    @server.tool(
+        description=(
+            "List files in the user's configured Google Drive Root Folder, or in a folder inside it. "
+            "Returns one line per item: relative path, mimeType, size, modified time, and ID. "
+            "Parameters: folder (optional ID or Drive URL of a folder inside the Root Folder; omit to list the "
+            "Root Folder), recursive (default true; false lists only direct children). "
+            "列出資料夾內的檔案。常見說法：「這個資料夾有什麼」「列出檔案」「有哪些 PDF」「子資料夾裡有什麼」。"
+        )
+    )
+    def list_files(folder: str | None = None, recursive: bool = True) -> str:
+        with _failures_as_tool_errors(account):
+            result = drive.list_files(folder=folder, recursive=recursive)
+        return _describe_listing(result, recursive)
+
+
+def _describe_listing(result: FolderListing, recursive: bool) -> str:
+    listing = result.listing
+    lines = [f"Root Folder：{result.root.name}"]
+    if result.folder_path:
+        kind = "資料夾" if result.folder.is_folder else "項目"
+        lines.append(f"列出的{kind}：{'/'.join(result.folder_path)}{'/' if result.folder.is_folder else ''}")
+    if not result.folder.is_folder:
+        lines.append("這是檔案，不是資料夾，以下只列出它本身。")
+    elif not listing.entries:
+        lines.append("這個資料夾是空的。")
+        return "\n".join(lines)
+    else:
+        scope = f"包含子資料夾，最多 {MAX_LIST_DEPTH} 層" if recursive else "只列出直接的子項目"
+        lines.append(f"共 {len(listing.entries)} 項（{scope}）：")
+
+    lines.append("路徑 | 類型 | 大小 | 修改時間 | ID")
+    lines += [_describe_item(entry.path, entry.item) for entry in listing.entries]
+
+    if listing.truncated:
+        lines.append(f"已達 {MAX_LIST_ITEMS} 筆上限，後面的項目沒有列出。可以用子資料夾的 ID 分別再列一次。")
+    if listing.unexpanded:
+        lines.append(f"以下資料夾位於第 {MAX_LIST_DEPTH} 層，沒有再往下列出：{'、'.join(listing.unexpanded)}")
+    if listing.repeated:
+        lines.append(f"以下資料夾重複出現，內容只列出一次：{'、'.join(listing.repeated)}")
+    return "\n".join(lines)
+
+
+def _describe_item(path: str, item: DriveItem) -> str:
+    kind = item.mime_type
+    if item.is_shortcut:
+        # R2：列出時不跟進捷徑，只標示目標；要讀目標時再對目標套用 R1
+        kind += f" → 目標 {item.shortcut_target_id}（{item.shortcut_target_mime_type}）"
+    # 名稱裡的 "|" 會和欄位分隔混淆，換成全形
+    return " | ".join([path.replace("|", "｜"), kind, _size(item.size), _time(item.modified_time), item.id])
+
+
+def _size(size: int | None) -> str:
+    if size is None:
+        # Google 文件、試算表、資料夾沒有檔案大小
+        return "—"
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{size} B" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def _time(modified: str | None) -> str:
+    # Drive 的格式是 RFC 3339（例如 2026-11-01T10:00:00.000Z），只保留到分鐘
+    if not modified or len(modified) < 16:
+        return "—"
+    return f"{modified[:10]} {modified[11:16]} UTC"

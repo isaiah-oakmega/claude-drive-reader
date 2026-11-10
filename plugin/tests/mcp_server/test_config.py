@@ -22,7 +22,7 @@ def test_every_variable_can_be_overridden(tmp_path: Path) -> None:
     config = Config.from_env(
         {
             "DRIVE_READER_BROKER_URL": "https://broker.example/",
-            "DRIVE_READER_ROOT_FOLDER": "https://drive.google.com/drive/folders/abc123",
+            "DRIVE_READER_ROOT_FOLDER": "https://drive.google.com/drive/folders/1VZWKGbpdNVHAK1y9lXhndLquS80gcemn",
             "DRIVE_READER_CREDENTIALS_PATH": str(tmp_path / "creds.json"),
             "DRIVE_READER_CALLBACK_PORT": "53682",
         },
@@ -30,8 +30,8 @@ def test_every_variable_can_be_overridden(tmp_path: Path) -> None:
     )
 
     assert config.broker_url == "https://broker.example/"
-    # Root Folder 的 URL 解析屬於 Drive Reading（階段 3），這裡原樣保留
-    assert config.root_folder == "https://drive.google.com/drive/folders/abc123"
+    # 網址在啟動時就解析成 ID
+    assert config.root_folder == "1VZWKGbpdNVHAK1y9lXhndLquS80gcemn"
     assert config.credentials_path == tmp_path / "creds.json"
     assert config.callback_port == 53682
 
@@ -67,3 +67,9 @@ def test_error_message_does_not_echo_the_value() -> None:
         Config.from_env({"DRIVE_READER_CALLBACK_PORT": "not-a-port-xyz"}, home=HOME)
 
     assert "not-a-port-xyz" not in str(raised.value)
+
+
+@pytest.mark.parametrize("value", ["not a folder", "https://evil.example/drive/folders/1VZWKGbpdNVHAK1y9lXhndLquS80gcemn"])
+def test_root_folder_must_be_a_drive_id_or_url(value: str) -> None:
+    with pytest.raises(InvalidConfig, match="DRIVE_READER_ROOT_FOLDER"):
+        Config.from_env({"DRIVE_READER_ROOT_FOLDER": value}, home=HOME)

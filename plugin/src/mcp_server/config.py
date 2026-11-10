@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from drive_reading.app import NotFoundOrNoAccess, parse_drive_id
 from local_authorization.domain.limits import MAX_CALLBACK_PORT, MIN_CALLBACK_PORT
 
 DEFAULT_BROKER_URL = "https://drive-auth.isaiahlin.dev"
@@ -23,7 +24,7 @@ class InvalidConfig(Exception):
 @dataclass(frozen=True)
 class Config:
     broker_url: str
-    # ID 或 Drive URL，解析由 Drive Reading 負責（階段 3）
+    # 已解析成 ID：設定的是網址也一樣
     root_folder: str
     credentials_path: Path
     # None 代表交給 OS 分配隨機 port（預設）；只有 SSH port forwarding 這類進階用法才需要固定
@@ -59,9 +60,15 @@ class Config:
                 )
             callback_port = int(port_text)
 
+        try:
+            # 解析規則屬於 Drive Reading；這裡只是在啟動時就呼叫它，設定錯了不必等到第一次列檔案才發現
+            root_folder = parse_drive_id(value("DRIVE_READER_ROOT_FOLDER") or DEFAULT_ROOT_FOLDER)
+        except NotFoundOrNoAccess:
+            raise InvalidConfig("DRIVE_READER_ROOT_FOLDER 必須是 Google Drive 資料夾的 ID 或網址") from None
+
         return cls(
             broker_url=broker_url,
-            root_folder=value("DRIVE_READER_ROOT_FOLDER") or DEFAULT_ROOT_FOLDER,
+            root_folder=root_folder,
             credentials_path=credentials_path,
             callback_port=callback_port,
         )
