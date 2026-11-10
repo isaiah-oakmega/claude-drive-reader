@@ -185,6 +185,21 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 | C3 `list_files` | `test_list_files_tool.py`：`folder`、`recursive` 兩個選填參數；每行為「路徑 \| 類型 \| 大小 \| 修改時間 \| ID」；空資料夾、只列直接子項目、截斷、沒展開的資料夾都有說明；名稱中的 `\|` 不會打亂欄位 | ✅ |
 | C5 Root Folder 設定 | 網址在啟動時解析成 ID；不是 Drive 的 ID 或網址時啟動失敗並指出變數名稱 | ✅ |
 
+### 真實檢查（開發者自行執行）
+
+使用者同意後，由開發者在 Linux 上用已保存的主帳號授權（`drive.readonly`）自行檢查，範圍只限開發用資料夾。方法：用 MCP client 依 `.mcp.json` 啟動已安裝的 plugin（`phase-3-listing` 的 `89b8e62`），直接呼叫 tool。這條路徑經過正式的 Broker 與 Drive API，只有「模型依自然語言選擇 tool」這一段不在內：桌面版內建的 `claude` 沒有登入 CLI，無法以 `claude -p` 非互動執行。這一段留給使用者在 Windows 上驗收。
+
+| 項目 | 結果 |
+|---|---|
+| `auth_status`：經 Broker refresh、再以 `about.get` 取得 email | ✅ 2026-11-10：已授權、主帳號 email、檔案權限 0600 |
+| `list_files` 不帶參數：列出開發用資料夾 | ✅ 2026-11-10：Root Folder 名稱正確；2 個檔案（PDF、PNG），路徑、mimeType、大小、修改時間、ID 都和 Drive 一致 |
+| `list_files` 指定檔案的 ID | ✅ 只列出該檔案，並說明它不是資料夾 |
+| `list_files` 的 `recursive=false` | ✅ 說明「只列出直接的子項目」 |
+| 情境 11：列出主帳號沒有權限的資料夾（出題方的資料夾） | ✅ `NOT_FOUND_OR_NO_ACCESS`，附上主帳號 email 與「接受邀請，或 logout 換帳號」 |
+| 情境 11：Root Folder 本身沒有權限（不設定 `DRIVE_READER_ROOT_FOLDER`，使用預設的出題方資料夾） | ✅ 同上，在列出任何內容之前就回報 |
+
+發現並修正：MCP SDK 把 log 設在 INFO，`httpx2` 因此把每個請求的完整網址（Drive 的檔案 ID 與查詢條件）寫到 stderr，而 stderr 會進 Claude Code 的 log。網址裡沒有 token，但沒有必要留下，已在組裝時把 `httpx2` 的 log 調到 WARNING（`6a42806`），重新檢查後不再出現。
+
 ## Repo 提前公開：歷史掃描
 
 2026-11-10 repo 提前改成 public（原計畫在階段 8），讓 Windows 測試從 GitHub 安裝時不必另外設定 GitHub 登入。公開後立即掃描所有分支的完整歷史（32 個 commit）：
@@ -196,3 +211,18 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 | commit 的作者資訊 | `git log --all --format='%ae %ce'` | commit 的作者與提交者 email 是開發者的個人信箱。改寫歷史會讓所有 commit hash 改變，本文件與 CI 紀錄引用的 commit 對不上，對作業沒有好處，因此保留 |
 
 階段 8 交付前，會再掃描這之後新增的 commit。
+
+## 待使用者驗收（集中進行）
+
+開發期間需要使用者本人操作的項目先跳過，記在這裡，最後在 Windows 上集中驗收。完成的項目移到各階段的「真實驗收」表格。
+
+### 準備：開發用資料夾的內容
+
+- [ ] 新增一個子資料夾，裡面至少放一個檔案（階段 3 的「列出子資料夾」）
+- [ ] 新增一個捷徑，指向 Root Folder 外、但帳號看得到的檔案（R2）
+
+### 階段 3：列出
+
+- [ ] Windows：說「列出資料夾內的檔案」，Claude 呼叫 `list_files` 並列出開發用資料夾（情境 8 的列出部分）
+- [ ] Windows：說「列出〇〇子資料夾裡的檔案」，只列出該子資料夾
+- [ ] Windows：列出 Root Folder 外、帳號看得到的資料夾網址，得到 `OUTSIDE_ROOT`
