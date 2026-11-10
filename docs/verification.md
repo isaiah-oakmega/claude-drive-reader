@@ -86,3 +86,14 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 |---|---|---|
 | `*.run.app` 上的端點：`/`、`/privacy` 200；`/docs` 404；`/authorize` 302 到 Google；不合法的 `/callback` 400；形狀不合的 `/token` 422 | — | ✅ 2026-11-10 |
 | 假的 refresh token 經 Broker 送到真實 Google，Google 的錯誤原樣轉回 | — | ✅ 2026-11-10：400 `{"error":"invalid_grant","error_description":"Bad Request"}` |
+| 自訂網域的憑證 | — | ✅ 2026-11-10：Cloudflare 加上 CNAME（DNS only）後約 1 小時簽發，`CN=drive-auth.isaiahlin.dev`，簽發者 Google Trust Services，之後由 Google 自動續期 |
+| 自訂網域上的端點：`/health` 200、`/`、`/privacy` 200、`/docs` 404、不合法的 `/callback` 400、`/authorize` 302 且 `redirect_uri` 是自訂網域的 `/callback` | — | ✅ 2026-11-10 |
+| 真實授權的 Code Relay：`/authorize` → Google 同意畫面（Testing 狀態）→ Broker `/callback` 302 → 瀏覽器轉到 `127.0.0.1:53682/callback`，本機沒有 listener，顯示 `ERR_CONNECTION_REFUSED`（預期） | 主帳號 | ✅ 2026-11-10 10:53 UTC：`/authorize` 302 後 12 秒 Broker 收到 `/callback` 並回 302 |
+| B1：真實授權碼經過後，Cloud Logging 沒有留下 code | 主帳號 | ✅ 2026-11-10：平台 request log 中 `/callback` 0 筆（排除規則生效）；應用程式 log 只有 `GET /callback 302`；30 分鐘內含 `code=` 或 `4/0` 的記錄 0 筆 |
+| 對照：同意畫面還在 Testing 時，不在 Test users 名單的帳號 | 第二帳號 | 預期中的封鎖（2026-11-10 10:54 UTC）：「已封鎖存取權：未完成 Google 驗證程序……目前處於測試階段」，`Error 403: access_denied`，沒有繼續的選項，也沒有呼叫 `/callback`。所以驗收者用的 app **一定要先 Publish** |
+| **風險 #2**：Publish app（In production、不送驗證）後，陌生帳號看到的是可以繼續的未驗證警告，而不是封鎖 | 第二帳號 | ✅ 2026-11-10 10:57 UTC：出現「Google 尚未驗證這個應用程式」，點「進階」→「前往（不安全）」→ 同意 → Broker `/callback` 302 → 瀏覽器轉到 `127.0.0.1:53682`（`ERR_CONNECTION_REFUSED`，預期）。整條 OAuth 路線成立 |
+| B1：第二帳號授權後 | 第二帳號 | ✅ 2026-11-10：2 小時內平台 request log 中 `/callback` 0 筆；含 `code=` 或 `4/0` 的記錄 0 筆 |
+
+觀察：
+- 未驗證的 app 在 Google 的畫面上顯示的是網域 `isaiahlin.dev`，不是設定的 app 名稱。README 的警告畫面說明要照實際畫面寫。
+- 發布之後，Testing 狀態下「refresh token 7 天失效」的限制就不再適用（計畫的 X2）。發布前取得的 credential 需要重新授權。
