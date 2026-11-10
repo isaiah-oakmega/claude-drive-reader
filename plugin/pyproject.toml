@@ -32,6 +32,8 @@ packages = [
 testpaths = ["tests"]
 # 測試依 context 與分層分資料夾，不同資料夾可能有同名檔案；importlib 模式避免模組名稱衝突
 addopts = "--import-mode=importlib"
+# importlib 模式下測試檔不能互相 import；共用的假物件放在 tests/support，用這個路徑讓測試 import
+pythonpath = ["tests/support"]
 
 # 依賴規則由 import-linter 強制，見 docs/implementation-spec.md「Repo 形態」。
 [tool.importlinter]

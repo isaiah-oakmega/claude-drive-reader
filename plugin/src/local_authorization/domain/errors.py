@@ -20,3 +20,14 @@ class BrokerUnreachable(AuthorizationError):
         super().__init__(broker_url)
         # 附上網址，讓使用者能判斷是網路問題還是 DRIVE_READER_BROKER_URL 設錯（情境 14）
         self.broker_url = broker_url
+
+
+class CallbackPortUnavailable(Exception):
+    """authorize 無法在 127.0.0.1 開 listener，通常是 DRIVE_READER_CALLBACK_PORT 指定的 port 已被占用。
+
+    不屬於 C2：它只會在發起授權時發生，Drive Reading 不會遇到。
+    """
+
+    def __init__(self, port: int | None) -> None:
+        super().__init__(port)
+        self.port = port
