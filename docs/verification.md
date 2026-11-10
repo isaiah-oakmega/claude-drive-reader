@@ -117,3 +117,28 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 觀察：
 - Claude Desktop 的 Code tab 沒有 `/plugin` 指令，改用 prompt 框旁的 **+** → **Add plugins** 開 plugin 瀏覽器，但它只列出已經加入的 marketplace，不能從 GitHub 加入新的 marketplace。同一台電腦上的 Desktop 和終端機版共用同一份設定檔，所以在終端機執行 `claude plugin marketplace add` 與 `claude plugin install` 後，Desktop 新開的 session 就會載入。README 要寫明這一點。
 - plugin 只在 session 啟動時載入，裝好後要開新的 session。
+
+### Mock 測試
+
+不連網：Broker 與 Google 以 `httpx2.MockTransport` 取代；loopback listener 真的在 127.0.0.1 開 port，用 HTTP client 打它；credential 檔寫在 `tmp_path`。2026-11-10 本機（Linux）共 196 passed；import-linter 4 kept。
+
+| 規則 | 測試 | 結果 |
+|---|---|---|
+| C1 `state` 格式（規則 5） | `tests/contract/test_state_format.py`：和 backend 同一份 `state_vectors.json`（另有一條測試確認兩份檔案內容相同）；本機產生的 `state` 一定符合 Broker 的格式；port 超出 1024–65535 時拒絕產生 | ✅ |
+| A1 同時最多一個 Attempt | `test_new_authorize_closes_and_replaces_previous_attempt`：舊的 listener 關閉，帶舊 `state` 的 callback 不算數 | ✅ |
+| A2 一次性、5 分鐘逾時、`state` 常數時間比對 | `tests/local_authorization/domain/test_attempt.py`：注入時間測逾時；收到 code 後不再接受任何 callback；非 ASCII 的 `state` 不會讓比對拋例外 | ✅ |
+| A2 `state` 不符回 400 且**不結束** Attempt | domain 的 `test_request_without_matching_state_is_rejected_and_attempt_keeps_waiting`（5 種雜訊請求之後，有效的 callback 仍能完成）；listener 的 `test_rejected_request_gets_400_and_listener_keeps_waiting`；`test_authorization_flow.py` 以真實 listener 走完「雜訊 400 → 有效 callback 200」 | ✅ |
+| 使用者拒絕、Google 其他錯誤、換 code 失敗 | `access_denied` → 已拒絕；其他 `error` 與 Broker 失敗、沒有 refresh token → 失敗；三者都不動既有的 Local Credential | ✅ |
+| 逾時關閉 listener | listener 的 `test_timeout_calls_back_and_closes_listener`；service 的 `test_listener_timeout_is_reported_as_timed_out`，以及計時器還沒觸發時 `auth_status` 也以時間判定逾時 | ✅ |
+| `DRIVE_READER_CALLBACK_PORT` 固定 port | `test_fixed_port_is_used_when_configured`、`test_configured_callback_port_is_used`；port 被占用時回報；設定值不是 1024–65535 的 ASCII 整數時啟動失敗（含全形數字） | ✅ |
+| A3 只保存 refresh token | `test_local_credential_holds_only_refresh_token_scope_and_time`、`test_file_contains_only_the_credential_fields` | ✅ |
+| A4 權限與原子寫入 | `test_file_is_0600_and_new_directory_is_0700`、umask 為 0 時覆寫仍是 0600、不改使用者指定的既有目錄權限、`os.replace` 失敗時舊檔完整且沒有殘留暫存檔。Windows 上權限測試 skip，改為驗證 `permissions_enforced` 為 False，`auth_status` 不宣稱 0600 | ✅ |
+| A5 `invalid_grant` 時刪除 | `test_invalid_grant_deletes_credential`：刪檔後下一次呼叫是 `NotAuthorized` | ✅ |
+| A6 logout | 先 revoke 再刪除；revoke 失敗仍刪除並回報，附上手動移除存取權的網址；沒有授權時不呼叫 Google | ✅ |
+| A7 結果頁不回顯參數 | `test_result_pages_never_reflect_request_parameters`：每種結果頁都送入 `<script>`；另確認請求行（含 `code`）不會被印到 stdout 或 stderr | ✅ |
+| C2 refresh 時機與 `invalidate` | 到期前 60 秒內才 refresh；`invalidate` 後強制 refresh；授權完成時直接使用換 code 拿到的 access token；Google 換發新的 refresh token 才寫檔 | ✅ |
+| C2 `current_account` | 只查一次並快取；未授權或 Broker 失敗時回 None；重新授權或 logout 後重新查詢 | ✅ |
+| C1 消費端 | `test_broker_client.py`：兩種 `/token` 請求的 JSON 形狀；`invalid_grant` → `AuthExpired`；其他 400、422、5xx、404、非 JSON、欄位缺漏或型別錯誤、連線失敗、逾時 → `BrokerUnreachable` 並附網址；換 code 不重試 | ✅ |
+| C3 授權相關 tool | `test_tools.py`：三個 tool 沒有必填參數、描述有中文；`authorize` 回傳網址、未驗證警告的操作與「完成後告訴我」；`auth_status` 四種上一次結果；Failure 格式 `[代碼] 原因。下一步：…` | ✅ |
+| 打包與啟動 | `test_stdio_server.py`：以 `python -m mcp_server` 透過 stdio 握手，列出三個 tool，且不建立 credential 檔；設定錯誤時以非 0 結束，訊息只寫到 stderr | ✅ |
+| 開瀏覽器不污染 MCP 的 stdout | `test_browser.py`：子程序的 stdin、stdout、stderr 都導到 DEVNULL；找不到開啟程式或啟動失敗時回 False | ✅ |
