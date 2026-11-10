@@ -250,7 +250,7 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 | 項目 | 結果 |
 |---|---|
 | 情境 14：Broker 網址錯誤 | ✅ 2026-11-10：設成不存在的網域（`https://drive-auth.invalid`）與關閉的本機 port（`http://127.0.0.1:9`），都得到 `BROKER_UNREACHABLE` 並附上設定的網址。刻意使用不可能收到資料的位址：設成任何真實的外部網站，等於把 refresh token 送給它（安全檢查擋下了一次這樣的嘗試，因此新增了上面的 https 規則，README 也寫明這個網址必須可信） |
-| 情境 16：access token 過期後再讀 | 進行中：同一個 MCP server process 內，先列出一次，等 62 分鐘（超過 access token 的 3599 秒），再列出一次 |
+| 情境 16：access token 過期後再讀 | ✅ 2026-11-10：同一個 MCP server process 內，15:57:32 UTC 列出一次，等 62 分鐘（超過 access token 的 3599 秒）後，16:59:33 UTC 再列出一次，結果相同、沒有任何錯誤：過期前 60 秒內的呼叫自動透過 Broker refresh，使用者察覺不到。用自然語言、在 Claude Code 裡實際等待的版本留到階段 8 |
 
 ## 階段 6：CI 定稿
 
@@ -262,6 +262,8 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 | 取消過時的 run | 同一分支有新的 push 時取消舊的 run（`concurrency`），避免 macOS runner 不足時舊 run 佔著排隊位置 |
 | 第 5 條依賴規則 | 新增 import-linter contract：`mcp_server` 的 tool、錯誤格式、設定只能經過 context 的 `app/`，只有組裝根 `mcp_server.__main__` 可以 import `infra/`。加入時先確認它會擋下當時直接 import `domain/` 的三處，改成從 `app/` 重新匯出後通過（5 kept） |
 | 故意製造錯誤：lockfile 與 `pyproject.toml` 不一致 | ✅ run #42850247899（暫時分支 `ci-negative-check`）：三個平台的 plugin job 都在 Install dependencies 失敗，訊息為 `The lockfile at uv.lock needs to be updated, but --locked was provided`；`package` job 照常通過，符合預期（`--frozen` 只照 lockfile 安裝） |
+| 故意製造錯誤：違反依賴規則 | ✅ run #42850283403（暫時分支 `ci-negative-imports`，只讓 `drive_reading.domain.limits` import `local_authorization.infra`）：ubuntu 與 windows 的 plugin job 在 Check dependency rules 失敗，訊息為 `Drive Reading reaches Local Authorization only through app/ BROKEN`；macOS job 排隊等不到 runner，已取消。兩個暫時分支在檢查後刪除 |
+| 三平台 CI（階段 3–7 完成後） | ✅ run #42851380179（`31cd403`）：9/9 success，包含三個平台的 `package` job |
 
 觀察：GitHub 的 macOS runner 有時排隊超過 15 分鐘後被取消，job 一個步驟都沒有執行（runner_name 為空）。這是 GitHub 端的容量問題，不是測試失敗；同一個 commit 的其他平台都通過。
 
