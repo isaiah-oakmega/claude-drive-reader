@@ -1,0 +1,14 @@
+{
+  "name": "drive-reader-marketplace",
+  "description": "Drive Reader: read a specified Google Drive folder from Claude Code",
+  "owner": {
+    "name": "Isaiah"
+  },
+  "plugins": [
+    {
+      "name": "drive-reader",
+      "source": "./plugin",
+      "description": "用自然語言讀取指定的 Google Drive 資料夾（OAuth、drive.readonly）"
+    }
+  ]
+}

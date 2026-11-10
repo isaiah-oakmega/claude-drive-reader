@@ -1,0 +1,10 @@
+{
+  "name": "drive-reader",
+  "displayName": "Drive Reader",
+  "description": "用自然語言讀取指定的 Google Drive 資料夾（OAuth、drive.readonly）",
+  "author": {
+    "name": "Isaiah"
+  },
+  "repository": "https://github.com/isaiah-oakmega/claude-drive-reader",
+  "keywords": ["google-drive", "oauth", "mcp"]
+}
