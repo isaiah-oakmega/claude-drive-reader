@@ -143,6 +143,8 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 | 打包與啟動 | `test_stdio_server.py`：以 `python -m mcp_server` 透過 stdio 握手，列出三個 tool，且不建立 credential 檔；設定錯誤時以非 0 結束，訊息只寫到 stderr | ✅ |
 | 開瀏覽器不污染 MCP 的 stdout | `test_browser.py`：子程序的 stdin、stdout、stderr 都導到 DEVNULL；找不到開啟程式或啟動失敗時回 False | ✅ |
 | 三平台 CI | GitHub Actions run #42827892715（`phase-2-local-auth` 的 `eba44f9`）：backend 與 plugin × ubuntu、macos、windows | ✅ 6/6 success |
+| 三平台 CI（`CALLBACK_PORT_UNAVAILABLE` 修改後） | run #42830167756（`58dbcde`） | ✅ 6/6 success |
+| 三平台 CI（合併進 `main` 後） | run #42843448432（`main` 的 `54aa435`） | ✅ 6/6 success |
 
 ### 真實驗收
 
@@ -162,6 +164,26 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 - Windows 上的 Claude Code CLI 安裝程式不會自己修改 PATH。uv 的安裝程式會把同一個 `%USERPROFILE%\.local\bin` 加進使用者 PATH，所以先裝 uv 再裝 Claude Code 時，不需要另外設定。README 的 Windows 步驟要寫明這個順序，並附上 PATH 沒設定時的處理方式。
 - Claude 會把 tool 的回傳整理成摘要再呈現，不一定逐字顯示。Windows 上 `auth_status` 對檔案保護方式的描述（不宣稱 0600）由 mock 測試涵蓋，CI 的 Windows job 也有跑。
 - 階段 2 結束時移除了暫時的 `spike_image` tool；stdio 握手測試改為確認只提供 `authorize`、`auth_status`、`logout` 三個 tool。
+
+## 階段 3：Drive Reading——存取與列出
+
+### Mock 測試
+
+不連網：Drive API 以 `httpx2.MockTransport` 取代；use case 與 tool 用記憶體裡的假 Drive（`tests/support/drive_fakes.py`，一棵含子資料夾、捷徑、Root Folder 外資料夾的樹）。2026-11-10 本機（Linux）plugin 共 285 passed；import-linter 4 kept。
+
+| 規則 | 測試 | 結果 |
+|---|---|---|
+| ID 或網址統一成 ID | `test_drive_id.py`：資料夾、檔案、文件、試算表、簡報、`open?id=`、`uc?id=` 等 11 種寫法；其他網站的網址、含引號的字串（避免改寫 `files.list` 的查詢條件）、路徑一律視為找不到 | ✅ |
+| R1 Root Folder 邊界 | `test_root_folder.py`：剛好 20 層可以、21 層不行；Root Folder 外、沒有 parents、中間有看不到的祖先、共用雲端硬碟的根都視為範圍外；parents 循環不會無限查詢 | ✅ |
+| R1 套用在指定的資料夾 | `test_list_files.py`：Root Folder 外的資料夾回 `OutsideRoot`，而且完全沒有列出它的內容；捷徑的目標在 Root Folder 外時同樣拒絕 | ✅ |
+| R2 捷徑 | 列出時不展開，輸出標示目標 ID 與類型 | ✅ |
+| R3 深度、筆數、循環、分頁 | `test_listing.py`：最多 5 層並註明沒展開的資料夾；剛好 500 筆不算截斷，第 501 筆出現才截斷，並且之後不再讀資料；廣度優先，截斷時保留淺層；重複的資料夾只展開一次。`test_drive_api.py`：跟隨 `nextPageToken`，而且只在需要時才要下一頁 | ✅ |
+| 共用雲端硬碟 | `supportsAllDrives`、`includeItemsFromAllDrives`；資料夾在共用雲端硬碟中時加上 `corpora=drive`、`driveId` | ✅ |
+| 404 與 401 的對應 | 404 → `NotFoundOrNoAccess`（R1 追溯祖先時則是「看不到」）；401 → `invalidate` 後換新 token 重來一次，第二次 401 → `GoogleApiError`；`NotAuthorized` 原樣往上，一個請求都不送 | ✅ |
+| R7 重試 | 429、500、503 等 1 秒、2 秒後各重試一次；第三次仍失敗 → `GoogleApiError`；400、403 不重試並保留 Google 的 reason；連線失敗、非 JSON 的 200 → `GoogleApiError` | ✅ |
+| R6 與 C3 的 Failure | `NOT_FOUND_OR_NO_ACCESS` 附上目前帳號的 email，下一步提到接受邀請與 logout；查 email 只在這種情況才做；`OUTSIDE_ROOT` 的下一步只導回 `list_files`，不提供繞過的方法；`GOOGLE_API_ERROR` 附狀態碼與 reason | ✅ |
+| C3 `list_files` | `test_list_files_tool.py`：`folder`、`recursive` 兩個選填參數；每行為「路徑 \| 類型 \| 大小 \| 修改時間 \| ID」；空資料夾、只列直接子項目、截斷、沒展開的資料夾都有說明；名稱中的 `\|` 不會打亂欄位 | ✅ |
+| C5 Root Folder 設定 | 網址在啟動時解析成 ID；不是 Drive 的 ID 或網址時啟動失敗並指出變數名稱 | ✅ |
 
 ## Repo 提前公開：歷史掃描
 
