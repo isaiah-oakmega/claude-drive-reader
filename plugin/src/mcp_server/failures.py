@@ -30,10 +30,11 @@ def failure_text(error: Exception) -> str | None:
                 "確認網路連線後再試一次；如果有設定 DRIVE_READER_BROKER_URL，請確認網址正確",
             )
         case CallbackPortUnavailable(port=port):
-            # C3 沒有這個情況的代碼（只會在固定 port 被占用時發生），所以不加代碼，只給原因與下一步
-            return (
-                f"無法在本機 127.0.0.1:{port} 等待授權結果，這個 port 可能已被其他程式使用。"
-                "下一步：把 DRIVE_READER_CALLBACK_PORT 改成其他 port，或移除這個設定讓系統自動選擇"
+            # 只會在設定固定 port 時發生；預設由 OS 分配沒人使用的 port
+            return _format(
+                "CALLBACK_PORT_UNAVAILABLE",
+                f"無法在本機 127.0.0.1:{port} 等待授權結果，這個 port 可能已被其他程式使用",
+                "把 DRIVE_READER_CALLBACK_PORT 改成其他 port，或移除這個設定讓系統自動選擇",
             )
     return None
 

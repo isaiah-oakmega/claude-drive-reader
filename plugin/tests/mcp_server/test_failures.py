@@ -16,6 +16,7 @@ FORMAT = re.compile(r"\[(?P<code>[A-Z_]+)\] .+。下一步：.+")
         (NotAuthorized(), "NOT_AUTHORIZED"),
         (AuthExpired(), "AUTH_EXPIRED"),
         (BrokerUnreachable("https://broker.example"), "BROKER_UNREACHABLE"),
+        (CallbackPortUnavailable(50000), "CALLBACK_PORT_UNAVAILABLE"),
     ],
 )
 def test_authorization_failures_have_code_and_next_step(error: Exception, code: str) -> None:

@@ -103,7 +103,7 @@ def test_authorize_says_when_browser_did_not_open(server: MCPServer, auth: FakeA
 def test_authorize_failure_is_reported_as_tool_error(server: MCPServer, auth: FakeAuthorization) -> None:
     auth.authorize_error = CallbackPortUnavailable(50000)
 
-    with pytest.raises(ToolError, match="DRIVE_READER_CALLBACK_PORT"):
+    with pytest.raises(ToolError, match=r"\[CALLBACK_PORT_UNAVAILABLE\].*DRIVE_READER_CALLBACK_PORT"):
         anyio.run(server.call_tool, "authorize", {})
 
 

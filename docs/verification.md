@@ -120,7 +120,7 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 
 ### Mock 測試
 
-不連網：Broker 與 Google 以 `httpx2.MockTransport` 取代；loopback listener 真的在 127.0.0.1 開 port，用 HTTP client 打它；credential 檔寫在 `tmp_path`。2026-11-10 本機（Linux）共 196 passed；import-linter 4 kept。
+不連網：Broker 與 Google 以 `httpx2.MockTransport` 取代；loopback listener 真的在 127.0.0.1 開 port，用 HTTP client 打它；credential 檔寫在 `tmp_path`。2026-11-10 本機（Linux）共 197 passed；import-linter 4 kept。
 
 | 規則 | 測試 | 結果 |
 |---|---|---|
@@ -130,7 +130,7 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 | A2 `state` 不符回 400 且**不結束** Attempt | domain 的 `test_request_without_matching_state_is_rejected_and_attempt_keeps_waiting`（5 種雜訊請求之後，有效的 callback 仍能完成）；listener 的 `test_rejected_request_gets_400_and_listener_keeps_waiting`；`test_authorization_flow.py` 以真實 listener 走完「雜訊 400 → 有效 callback 200」 | ✅ |
 | 使用者拒絕、Google 其他錯誤、換 code 失敗 | `access_denied` → 已拒絕；其他 `error` 與 Broker 失敗、沒有 refresh token → 失敗；三者都不動既有的 Local Credential | ✅ |
 | 逾時關閉 listener | listener 的 `test_timeout_calls_back_and_closes_listener`；service 的 `test_listener_timeout_is_reported_as_timed_out`，以及計時器還沒觸發時 `auth_status` 也以時間判定逾時 | ✅ |
-| `DRIVE_READER_CALLBACK_PORT` 固定 port | `test_fixed_port_is_used_when_configured`、`test_configured_callback_port_is_used`；port 被占用時回報；設定值不是 1024–65535 的 ASCII 整數時啟動失敗（含全形數字） | ✅ |
+| `DRIVE_READER_CALLBACK_PORT` 固定 port | `test_fixed_port_is_used_when_configured`、`test_configured_callback_port_is_used`；port 被占用時回報 `CALLBACK_PORT_UNAVAILABLE`（規格經同意後新增的代碼）；設定值不是 1024–65535 的 ASCII 整數時啟動失敗（含全形數字） | ✅ |
 | A3 只保存 refresh token | `test_local_credential_holds_only_refresh_token_scope_and_time`、`test_file_contains_only_the_credential_fields` | ✅ |
 | A4 權限與原子寫入 | `test_file_is_0600_and_new_directory_is_0700`、umask 為 0 時覆寫仍是 0600、不改使用者指定的既有目錄權限、`os.replace` 失敗時舊檔完整且沒有殘留暫存檔。Windows 上權限測試 skip，改為驗證 `permissions_enforced` 為 False，`auth_status` 不宣稱 0600 | ✅ |
 | A5 `invalid_grant` 時刪除 | `test_invalid_grant_deletes_credential`：刪檔後下一次呼叫是 `NotAuthorized` | ✅ |
