@@ -40,3 +40,22 @@ def test_invalid_config_stops_startup_with_variable_name(tmp_path: Path) -> None
     assert "設定錯誤" in finished.stderr
     # stdout 是 MCP 的通訊管道，錯誤訊息只能寫到 stderr
     assert finished.stdout == ""
+
+
+def test_http_request_lines_are_not_logged(tmp_path: Path) -> None:
+    # httpx2 預設在 INFO 層級記下每個請求的完整網址（含 Drive 的檔案 ID 與查詢條件），
+    # stderr 會進 Claude Code 的 log。組裝時要把它調到 WARNING。
+    import logging
+
+    from mcp_server.__main__ import build_server
+    from mcp_server.config import Config
+
+    root = logging.getLogger()
+    previous = root.level
+    # MCP SDK 啟動時把 root logger 設在 INFO；在這個前提下檢查
+    root.setLevel(logging.INFO)
+    try:
+        build_server(Config.from_env({"DRIVE_READER_CREDENTIALS_PATH": str(tmp_path / "c.json")}, home=tmp_path))
+        assert logging.getLogger("httpx2").getEffectiveLevel() >= logging.WARNING
+    finally:
+        root.setLevel(previous)

@@ -3,6 +3,7 @@
 所有實例都在這裡建立，再透過建構子傳進 context 的 app/；context 自己不知道設定從哪裡來。
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -24,6 +25,10 @@ from mcp_server.config import Config, InvalidConfig
 
 
 def build_server(config: Config) -> MCPServer:
+    # httpx2 在 INFO 層級會記下每個請求的完整網址（Drive 的檔案 ID、查詢條件），而 stderr 會進 Claude Code 的 log。
+    # token 不在網址裡，但這些資訊沒有必要留下；只保留 WARNING 以上的訊息。
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
+
     http = auth_http.new_http_client()
     store = CredentialStore(config.credentials_path)
     broker = BrokerClient(config.broker_url, http)
