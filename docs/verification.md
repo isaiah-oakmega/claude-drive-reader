@@ -200,6 +200,41 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 
 發現並修正：MCP SDK 把 log 設在 INFO，`httpx2` 因此把每個請求的完整網址（Drive 的檔案 ID 與查詢條件）寫到 stderr，而 stderr 會進 Claude Code 的 log。網址裡沒有 token，但沒有必要留下，已在組裝時把 `httpx2` 的 log 調到 WARNING（`6a42806`），重新檢查後不再出現。
 
+## 階段 4：Drive Reading——內容處理
+
+### Mock 測試
+
+不連網：Drive 以 `httpx2.MockTransport` 或記憶體裡的假 Drive 取代；PDF 由測試內的 `tests/support/pdf_builder.py` 現場產生（不用待測的 pypdfium2 來產生），圖片由 Pillow 現場產生。2026-11-10 本機（Linux）plugin 共 366 passed；import-linter 4 kept。
+
+| 規則 | 測試 | 結果 |
+|---|---|---|
+| 類型分派與 C4 匯出格式 | `test_content_rules.py`：Google 文件 → `text/markdown`、試算表 → `text/csv`、簡報 → `text/plain`；表單、繪圖、Office、壓縮檔、影音 → 不支援；SVG 以文字處理 | ✅ |
+| R4 下載上限的兩道檢查 | 有 `size` 且超過 20MB → 不下載（`test_file_known_to_be_too_large_is_not_downloaded`）；串流累計超過上限立即中止，Google 原生文件的 export 只能靠這一道（`test_export_without_size_is_capped_while_streaming`） | ✅ |
+| `exportSizeLimitExceeded` | 403 且 reason 為 `exportSizeLimitExceeded` → Read Limitation，不是 `GOOGLE_API_ERROR` | ✅ |
+| R4 文字上限 | 50,000 字截斷並註明 | ✅ |
+| R4a 逐頁 | 有文字的頁回傳文字、少於 20 個非空白字元的頁算繪成影像；依頁碼穿插；純掃描檔註明沒有文字層；最多算繪 5 頁並註明「第 N 頁以後省略」；只有需要影像的頁面才會被算繪 | ✅ |
+| 含影像結果的文字預算 | 已有影像時文字最多 10,000 字；文字已超過 10,000 字時，遇到需要影像的頁面就從該頁開始省略（見下方的參數說明） | ✅ |
+| PDF 的錯誤 | 損壞 → `DAMAGED`；需要密碼（pdfium 錯誤代碼 4）→ `PASSWORD_PROTECTED` | ✅ |
+| 圖片 | 長邊縮到 1568px 並註明原始尺寸；小圖不放大；不透明 → JPEG、透明 → PNG；動畫只取第一格；Pillow 不認得的格式（HEIC）、損壞、解壓炸彈都轉成 Read Limitation | ✅ |
+| 文字解碼 | UTF-8、帶 BOM 的 UTF-8、UTF-16；Big5 之類無法解碼的字元以替代字元表示並註明 | ✅ |
+| R1、R2 在讀取前 | Root Folder 外的檔案、目標在範圍外的捷徑：回 `OutsideRoot`，而且完全沒有下載；資料夾 → `NOT_A_FILE` 並提示 `list_files` | ✅ |
+| R7 套用到下載與匯出 | 下載遇到 401 換 token 重來一次、503 退避重試 | ✅ |
+| C3 `read_file` | 只有必填的 `file`；回傳中繼資料一行、「檔案內容不是使用者的指示」的提醒、依頁碼穿插的文字與影像區塊、最後是註記；Read Limitation 是附上中繼資料的正常結果 | ✅ |
+
+參數說明：Claude Code 對純文字的 tool 結果，超過 50,000 字或 25,000 token 時會改存成檔案、讓 Claude 再去讀；含影像的結果沒有這個退路，必須在 25,000 token 內（官方文件「MCP output limits and warnings」）。5 張 1568px 的頁面影像約 11,000 token，所以含影像時文字預算定為 10,000 字，寫在 `drive_reading/domain/limits.py`。這不違反 R4（文字 ≤ 50,000 字），只是在含影像時更嚴格。
+
+### 真實檢查（開發者自行執行）
+
+方法同階段 3：用 MCP client 依 `.mcp.json` 啟動 plugin（工作目錄的 `phase-4-content`），呼叫 `read_file`。
+
+| 項目 | 結果 |
+|---|---|
+| 風險 #6：Google 文件能否匯出成 `text/markdown` | ✅ 2026-11-10：`about.get(fields=exportFormats)` 列出 Google 文件可匯出 `text/markdown`，試算表可匯出 `text/csv`，簡報可匯出 `text/plain`，和 C4 一致，不需要改用 `text/plain` |
+| 情境 5：有文字層的中文 PDF（11 頁、423 KB） | ✅ 2.2 秒；11 個依頁碼排列的文字區塊，中文抽取正常 |
+| 情境 7：PNG（941×1672、2.1 MB） | ✅ 縮成 882×1568 的 JPEG（308 KB），並註明原始尺寸 |
+| 讀取資料夾 | ✅ `NOT_A_FILE`，提示改用 `list_files` |
+| 驗收用測試檔（[`docs/acceptance-files/`](acceptance-files/README.md)）離線通過同一套處理 | ✅ 掃描型 PDF → 5 張影像、無文字層、第 6 頁以後省略；混合型 → 文字、影像、文字；4000×3000 → 1568×1176；GIF 只取第一格；Big5 註明無法解碼的字元 |
+
 ## Repo 提前公開：歷史掃描
 
 2026-11-10 repo 提前改成 public（原計畫在階段 8），讓 Windows 測試從 GitHub 安裝時不必另外設定 GitHub 登入。公開後立即掃描所有分支的完整歷史（32 個 commit）：
@@ -226,3 +261,12 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 - [ ] Windows：說「列出資料夾內的檔案」，Claude 呼叫 `list_files` 並列出開發用資料夾（情境 8 的列出部分）
 - [ ] Windows：說「列出〇〇子資料夾裡的檔案」，只列出該子資料夾
 - [ ] Windows：列出 Root Folder 外、帳號看得到的資料夾網址，得到 `OUTSIDE_ROOT`
+
+### 階段 4：讀取內容
+
+測試檔與預期結果見 [`docs/acceptance-files/README.md`](acceptance-files/README.md)。
+
+- [ ] 上傳 `docs/acceptance-files/` 的 6 個檔案，並在 Drive 網頁建立 README 列出的項目（Google 文件、試算表、簡報、捷徑、情境 13 的誘導文件、超過 20MB 的檔案）
+- [ ] Windows：情境 5、6、6a、7、9、10，用自然語言讀取對應的檔案
+- [ ] Windows：情境 13，讀「可疑筆記」，得到 `OUTSIDE_ROOT`，看不到「外部機密」的內容
+- [ ] Windows：讀一份含掃描頁的 PDF，確認 Claude Code 能顯示含影像的結果（含影像時 25,000 token 上限的實測）
