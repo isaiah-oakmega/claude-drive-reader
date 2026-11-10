@@ -73,3 +73,16 @@ def test_error_message_does_not_echo_the_value() -> None:
 def test_root_folder_must_be_a_drive_id_or_url(value: str) -> None:
     with pytest.raises(InvalidConfig, match="DRIVE_READER_ROOT_FOLDER"):
         Config.from_env({"DRIVE_READER_ROOT_FOLDER": value}, home=HOME)
+
+
+@pytest.mark.parametrize("value", ["http://drive-auth.example.com", "http://10.0.0.5:8080"])
+def test_broker_url_must_use_https_for_remote_hosts(value: str) -> None:
+    # refresh token 會送到這個網址；不能讓它以明文經過網路
+    with pytest.raises(InvalidConfig, match="https"):
+        Config.from_env({"DRIVE_READER_BROKER_URL": value}, home=HOME)
+
+
+@pytest.mark.parametrize("value", ["http://127.0.0.1:8000", "http://localhost:8000", "http://[::1]:8000"])
+def test_plain_http_is_allowed_for_a_local_broker(value: str) -> None:
+    # 開發時在本機跑 Broker 的情況
+    assert Config.from_env({"DRIVE_READER_BROKER_URL": value}, home=HOME).broker_url == value

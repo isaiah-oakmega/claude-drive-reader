@@ -15,6 +15,7 @@ DEFAULT_ROOT_FOLDER = "1AU6ZW-3NFxme6388YPe98bGWWh9q_E5Y"
 
 # 只接受 ASCII 數字：int() 會把全形數字「５３６８２」也當成 53682
 _PORT_PATTERN = re.compile(r"[0-9]{1,5}", re.ASCII)
+_LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 
 class InvalidConfig(Exception):
@@ -41,6 +42,9 @@ class Config:
         parts = urlsplit(broker_url)
         if parts.scheme not in ("http", "https") or not parts.netloc:
             raise InvalidConfig("DRIVE_READER_BROKER_URL 必須是完整的網址，例如 https://drive-auth.example.com")
+        if parts.scheme == "http" and parts.hostname not in _LOCAL_HOSTS:
+            # refresh token 會送到 Broker：只有本機開發用的 Broker 可以不加密
+            raise InvalidConfig("DRIVE_READER_BROKER_URL 必須使用 https（只有 localhost 可以用 http）")
 
         credentials = value("DRIVE_READER_CREDENTIALS_PATH")
         credentials_path = (
