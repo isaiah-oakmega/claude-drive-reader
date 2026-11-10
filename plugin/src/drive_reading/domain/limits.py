@@ -14,3 +14,20 @@ RETRY_DELAYS_SECONDS = (1.0, 2.0)
 # R4：呼叫 Drive 的逾時，連線 10 秒、讀取 30 秒，和 Local Authorization 的值相同。
 HTTP_CONNECT_TIMEOUT_SECONDS = 10.0
 HTTP_READ_TIMEOUT_SECONDS = 30.0
+
+# R4：交付給 Claude 的內容上限。
+# 下載最多 20MB：在下載前看 size，下載中也逐段累計（Google 原生文件的 export 沒有 size）。
+MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
+# 文字最多 50,000 字。
+MAX_TEXT_CHARS = 50_000
+# 結果裡有影像時，文字只留 10,000 字：Claude Code 對含影像的 tool 結果只有 25,000 token 的上限，
+# 不會像純文字結果那樣改存成檔案；5 張 1568px 的頁面影像約 11,000 token，剩下的留給文字。
+MAX_TEXT_CHARS_WITH_IMAGES = 10_000
+# PDF 整份文件合計最多算繪 5 頁。
+MAX_RENDERED_PAGES = 5
+# 圖片與算繪頁面的長邊上限：Claude 處理圖片時會把長邊縮到這個大小，先縮好可以省下傳輸量。
+MAX_IMAGE_SIDE = 1568
+
+# R4a：一頁抽出的非空白字元少於 20 個，就當成沒有文字層（掃描頁），改算繪成影像。
+# 頁碼、頁首這類零星文字不會超過這個數量。
+MIN_TEXT_CHARS_PER_PAGE = 20

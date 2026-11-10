@@ -7,6 +7,8 @@ dependencies = [
     # mcp 本身就依賴 httpx2（httpx 的下一代，API 相同），直接沿用它，同一個環境不裝兩套 HTTP client。
     "httpx2>=2.16.0",
     "mcp>=2.3.0",
+    "pillow>=11",
+    "pypdfium2>=4.30",
 ]
 
 [dependency-groups]
