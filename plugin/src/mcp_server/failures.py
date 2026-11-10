@@ -5,7 +5,7 @@
 
 from collections.abc import Callable
 
-from drive_reading.app import DriveReadingError, GoogleApiError, NotFoundOrNoAccess, OutsideRoot
+from drive_reading.app import DriveReadingError, GoogleApiError, NotAFile, NotFoundOrNoAccess, OutsideRoot
 from local_authorization.app import AuthExpired, AuthorizationError, BrokerUnreachable, CallbackPortUnavailable, NotAuthorized
 
 # tool 層要攔下並轉成 Failure 的例外；其他例外是程式錯誤，交給 MCP SDK 當成 crash
@@ -55,6 +55,12 @@ def failure_text(error: Exception, account: Callable[[], str | None] = lambda: N
                 "OUTSIDE_ROOT",
                 f"{reference} 不在設定的 Root Folder 範圍內，Drive Reader 不會讀取它",
                 "只使用 list_files 列出的項目；如果使用者確實需要其他資料夾，請使用者自行修改 DRIVE_READER_ROOT_FOLDER 設定",
+            )
+        case NotAFile(reference=reference):
+            return _format(
+                "NOT_A_FILE",
+                f"{reference} 是資料夾，不是檔案",
+                "用 list_files 列出這個資料夾的內容，再用 read_file 讀取其中的檔案",
             )
         case GoogleApiError(status=status, reason=reason):
             where = f"HTTP {status}" if status is not None else "沒有收到回應"

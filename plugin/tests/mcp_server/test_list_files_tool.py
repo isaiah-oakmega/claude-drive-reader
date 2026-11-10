@@ -25,9 +25,8 @@ def call(server: MCPServer, **arguments) -> str:
 
 
 def test_schema_has_optional_folder_and_recursive() -> None:
-    (tool,) = anyio.run(server_for(sample_drive()).list_tools)
+    tool = next(tool for tool in anyio.run(server_for(sample_drive()).list_tools) if tool.name == "list_files")
 
-    assert tool.name == "list_files"
     assert set(tool.input_schema["properties"]) == {"folder", "recursive"}
     assert not tool.input_schema.get("required")
     assert any("一" <= ch <= "鿿" for ch in tool.description)

@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from drive_reading.app import GoogleApiError, NotFoundOrNoAccess, OutsideRoot
+from drive_reading.app import GoogleApiError, NotAFile, NotFoundOrNoAccess, OutsideRoot
 from local_authorization.app import AuthExpired, BrokerUnreachable, CallbackPortUnavailable, NotAuthorized
 from mcp_server.failures import failure_text
 
@@ -20,6 +20,7 @@ FORMAT = re.compile(r"\[(?P<code>[A-Z_]+)\] .+。下一步：.+")
         (CallbackPortUnavailable(50000), "CALLBACK_PORT_UNAVAILABLE"),
         (NotFoundOrNoAccess("abc"), "NOT_FOUND_OR_NO_ACCESS"),
         (OutsideRoot("abc"), "OUTSIDE_ROOT"),
+        (NotAFile("abc"), "NOT_A_FILE"),
         (GoogleApiError(403, "insufficientFilePermissions"), "GOOGLE_API_ERROR"),
         (GoogleApiError(None, "無法連線到 Google Drive"), "GOOGLE_API_ERROR"),
     ],
@@ -86,3 +87,8 @@ def test_google_api_error_includes_status_and_reason() -> None:
     text = failure_text(GoogleApiError(403, "insufficientFilePermissions"))
 
     assert "403" in text and "insufficientFilePermissions" in text
+
+
+def test_not_a_file_points_to_list_files() -> None:
+    # C3：read_file 收到資料夾時，提示改用 list_files
+    assert "list_files" in failure_text(NotAFile("abc")).split("下一步：")[1]
