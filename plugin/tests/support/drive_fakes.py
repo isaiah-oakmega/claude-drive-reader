@@ -4,6 +4,7 @@ from collections.abc import Iterator
 
 from drive_reading.domain.drive_item import FOLDER_MIME, SHORTCUT_MIME, DriveItem
 from drive_reading.domain.errors import NotFoundOrNoAccess
+from drive_reading.infra.drive_api import DownloadTooLarge, ExportTooLarge
 
 ROOT_ID = "root-folder-id-0001"
 
@@ -35,12 +36,38 @@ def shortcut(item_id: str, parent: str, target_id: str, target_mime: str = "appl
 
 
 class FakeDrive:
-    """hidden 裡的 ID 對目前的帳號來說「看不到」，行為和 Drive 回 404 一樣。"""
+    """hidden 裡的 ID 對目前的帳號來說「看不到」，行為和 Drive 回 404 一樣。
+
+    contents 是一般檔案的內容；exports 以 (ID, 匯出格式) 對應匯出的內容。
+    export_too_large 裡的 ID 匯出時，模擬 Google 回 exportSizeLimitExceeded。
+    """
 
     def __init__(self, *items: DriveItem, hidden: set[str] | None = None) -> None:
         self.items = {item.id: item for item in items}
         self.hidden = hidden or set()
         self.listed: list[str] = []
+        self.contents: dict[str, bytes] = {}
+        self.exports: dict[tuple[str, str], bytes] = {}
+        self.export_too_large: set[str] = set()
+        self.downloaded: list[str] = []
+
+    def download(self, item_id: str, max_bytes: int) -> bytes:
+        self.get_item(item_id)
+        self.downloaded.append(item_id)
+        return self._capped(self.contents[item_id], max_bytes)
+
+    def export(self, item_id: str, mime_type: str, max_bytes: int) -> bytes:
+        self.get_item(item_id)
+        self.downloaded.append(item_id)
+        if item_id in self.export_too_large:
+            raise ExportTooLarge
+        return self._capped(self.exports[(item_id, mime_type)], max_bytes)
+
+    @staticmethod
+    def _capped(data: bytes, max_bytes: int) -> bytes:
+        if len(data) > max_bytes:
+            raise DownloadTooLarge
+        return data
 
     def get_item(self, item_id: str) -> DriveItem:
         item = self.find_item(item_id)

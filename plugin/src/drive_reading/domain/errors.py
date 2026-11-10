@@ -32,3 +32,11 @@ class GoogleApiError(DriveReadingError):
         # status 為 None 代表連線本身失敗，沒有拿到 HTTP 回應
         self.status = status
         self.reason = reason
+
+
+class NotAFile(DriveReadingError):
+    """read_file 收到的是資料夾（C3：提示改用 list_files）。"""
+
+    def __init__(self, reference: str) -> None:
+        super().__init__(reference)
+        self.reference = reference
