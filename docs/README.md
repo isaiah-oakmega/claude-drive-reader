@@ -20,9 +20,17 @@
 
 | 文件 | 內容 |
 |------|------|
+| [架構說明](architecture.md) | 元件與資料流、OAuth flow 的選擇、token 保存、讀取策略、trade-off、已知限制 |
 | [實作規格](implementation-spec.md) | bounded contexts、不變式、公開合約（Broker API、MCP tools）、實作順序、驗證策略 |
 | [ADR](adr/) | 難以回頭的架構決策與其取捨 |
 | [名詞表](../CONTEXT.md) | 專案的 ubiquitous language |
+
+## 驗證
+
+| 文件 | 內容 |
+|------|------|
+| [驗證紀錄](verification.md) | 每個階段的 mock 測試、真實驗收結果，以及待使用者驗收的清單 |
+| [驗收用測試檔](acceptance-files/README.md) | 上傳到 Root Folder 的測試檔與預期結果 |
 
 ## 部署與設定
 
