@@ -56,7 +56,7 @@ claude plugin install drive-reader --marketplace isaiah-oakmega/claude-drive-rea
 /plugin install drive-reader@drive-reader-marketplace
 ```
 
-安裝後**重新啟動 Claude Code**，輸入 `/mcp`，確認 `plugin:drive-reader:drive` 顯示 connected。第一次啟動要下載 Python 與套件，視網路速度需要幾秒到幾十秒。如果超過 Claude Code 預設的 30 秒啟動時限，`/mcp` 會顯示 `connection timed out after 30000ms`，處理方式見[疑難排解](#疑難排解)。
+安裝後**重新啟動 Claude Code**，輸入 `/mcp`，確認 `plugin:drive-reader:drive` 顯示 connected。第一次啟動要下載 Python 與套件，視網路速度需要幾秒到幾十秒。如果超過 Claude Code 預設的 30 秒啟動時限，`/mcp` 會顯示 `connection timed out after 30000ms`，處理方式見[啟動逾時](#啟動逾時)。
 
 > 使用 Claude Desktop 的 Code 分頁：Desktop 不能從畫面上加入 GitHub 上的 marketplace，請先在終端機執行上面的安裝指令。同一台電腦上的 Desktop 和終端機版共用設定，裝好後在 Desktop 開新的 session 就能使用。
 
@@ -150,12 +150,37 @@ claude plugin install drive-reader --marketplace isaiah-oakmega/claude-drive-rea
 | 狀況 | 處理 |
 |---|---|
 | `/mcp` 顯示 `plugin:drive-reader:drive` failed | 多半是找不到 `uv`。確認終端機中 `uv --version` 可以執行，然後**完全重啟** Claude Code（Desktop 要從系統匣結束再開） |
-| `/mcp` 顯示 `connection timed out after 30000ms` | 第一次啟動要下載 Python 與套件，網路慢時會超過 Claude Code 預設的 30 秒啟動時限；更新 plugin 後也會在新的資料夾重新安裝一次。先結束 Claude Code，再用較長的時限啟動一次（`MCP_TIMEOUT` 的單位是毫秒）：<br>macOS、Linux：`MCP_TIMEOUT=180000 claude`<br>Windows（PowerShell）：`$env:MCP_TIMEOUT = '180000'; claude`<br>安裝完成後環境會保留下來，之後照平常方式啟動即可 |
+| `/mcp` 顯示 `connection timed out after 30000ms` | 第一次啟動要下載 Python 與套件並建立環境，可能超過 Claude Code 預設的 30 秒啟動時限；更新 plugin 後也會在新的資料夾重新建立一次。見下方[啟動逾時](#啟動逾時) |
 | Windows：`claude` 顯示 `is not recognized` | Claude Code 的安裝程式不會修改 PATH。執行下面兩行後重開 PowerShell：<br>`$p = [Environment]::GetEnvironmentVariable('PATH', 'User')`<br>`[Environment]::SetEnvironmentVariable('PATH', "$p;$env:USERPROFILE\.local\bin", 'User')` |
 | 瀏覽器沒有自動開啟 | 手動點 Claude 顯示的授權網址，結果相同 |
 | 同意後瀏覽器顯示「無法連上 127.0.0.1」 | 授權已逾時（超過 5 分鐘），或 Claude Code 在另一台電腦上。重新授權 |
 | Claude Code 跑在 SSH 遠端機器上 | 授權結果會送回瀏覽器那台電腦的 `127.0.0.1`，到不了遠端。進階做法：在遠端設定 `DRIVE_READER_CALLBACK_PORT=53682`，連線時加上 `ssh -L 53682:127.0.0.1:53682 <遠端>` 轉送這個 port |
 | 想換 Google 帳號 | 說「登出」，再說「幫我授權」，選另一個帳號 |
+
+#### 啟動逾時
+
+先結束 Claude Code，用下面任一種方法完成第一次的環境建立。環境建好後會保留下來，之後照平常方式啟動即可。
+
+**方法一：先在終端機完成安裝。** 這一步沒有時間限制，跑完沒有錯誤就可以重新開啟 Claude Code。
+
+Windows（PowerShell）：
+
+```powershell
+$p = (Get-Content "$HOME\.claude\plugins\installed_plugins.json" -Raw | ConvertFrom-Json).plugins.'drive-reader@drive-reader-marketplace'[0].installPath
+uv sync --frozen --no-dev --directory $p
+```
+
+macOS、Linux：
+
+```bash
+p=$(grep -o '"installPath": *"[^"]*/drive-reader-marketplace/drive-reader/[^"]*"' ~/.claude/plugins/installed_plugins.json | head -1 | cut -d'"' -f4)
+uv sync --frozen --no-dev --directory "$p"
+```
+
+**方法二：放寬啟動時限，啟動一次。** `MCP_TIMEOUT` 的單位是毫秒，只對這一次啟動有效：
+
+- Windows（PowerShell）：`$env:MCP_TIMEOUT = '180000'; claude`
+- macOS、Linux：`MCP_TIMEOUT=180000 claude`
 
 ---
 
