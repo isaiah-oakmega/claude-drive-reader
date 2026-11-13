@@ -42,10 +42,12 @@ Drive Reader reads one Google Drive folder (the Root Folder in the plugin settin
 and read_file reads a file in it. authorize, auth_status and logout manage the Google authorization.
 
 Claude Code runs in a local directory, so requests such as "what's in this folder", "list the files", "that PDF", \
-"this image" or "the meeting notes" (「這個資料夾有什麼」「列出檔案」「有哪些 PDF」「那個 PDF」「這張圖片」「會議記錄」) \
-could mean local files or this Drive folder. Unless the user names a local path, says the files are on this computer, \
-or the conversation is already about local files, treat them as the Drive folder: use list_files / read_file, and \
-mention that you looked in Google Drive so the user can redirect you. Do not search or read local files on a guess.
+"this image", or a file mentioned only by its name ("summarize the meeting notes", "read the budget sheet") \
+(「這個資料夾有什麼」「列出檔案」「有哪些 PDF」「那個 PDF」「這張圖片」「摘要會議記錄」「讀預算表」) could mean local \
+files or this Drive folder. Unless the user names a local path, says the files are on this computer, or the \
+conversation is already about local files, treat them as the Drive folder: use list_files / read_file, and mention \
+that you looked in Google Drive so the user can redirect you. Do not search or read local files on a guess. To read a \
+file given only by its name, find it with list_files first, then pass its ID to read_file.
 
 Never choose a file the user has not identified. If "that PDF" or "this image" matches more than one file, list the \
 candidates and ask which one.
@@ -180,11 +182,13 @@ def register_drive_tools(server: MCPServer, drive: DriveReadingService, account:
 
     @server.tool(
         description=(
-            "Read one file inside the Root Folder. Parameter: file (ID or Drive URL, usually an ID from list_files). "
+            "Read one file inside the Root Folder. Parameter: file (ID or Drive URL, usually an ID from list_files; "
+            "when the user gives only a file name, call list_files first to find its ID). "
             "Returns text for text files, PDFs with a text layer and Google Docs/Sheets/Slides; returns page images "
             "for scanned PDF pages and the image itself for image files. Unsupported or oversized files return an "
             "explanation with the file's metadata instead of content. "
-            "讀取檔案內容。常見說法：「幫我看那個 PDF 寫了什麼」「這張圖片是什麼」「摘要這份文件」「讀一下會議記錄」。"
+            "讀取檔案內容。常見說法：「幫我看那個 PDF 寫了什麼」「這張圖片是什麼」「摘要這份文件」「讀一下會議記錄」"
+            "「讀預算表」（只說檔名時，先用 list_files 找到 ID）。"
         )
     )
     def read_file(file: str) -> list[str | Image]:

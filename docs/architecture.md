@@ -195,6 +195,7 @@ flowchart LR
 - 只有一個 Root Folder，不能在對話中切換；要讀其他資料夾須修改設定並重啟 Claude Code。
 - 不做搜尋、寫入、監聽變更（作業明列的非目標）。
 - 不解析 docx、xlsx 等 Office 格式；不做 OCR。
+- 文字檔只認 UTF-8 與 UTF-16。Big5 等其他編碼不猜測，無法解碼的字元以替代字元表示並註明：猜錯編碼會產生看似正常的亂碼，比註明更容易誤導。
 - Google 試算表只讀得到第一個工作表；超過 5 頁的掃描檔只讀前 5 頁。
 - `read_file` 沒有頁碼範圍參數：截斷或省略的部分無法單獨再讀。
 - 授權時瀏覽器與 Claude Code 必須在同一台電腦。SSH 遠端只能透過 `DRIVE_READER_CALLBACK_PORT` 加上 `ssh -L` 自行轉送。

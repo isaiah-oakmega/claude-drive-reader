@@ -200,6 +200,8 @@ def test_server_instructions_settle_drive_versus_local_and_bare_logout() -> None
     for name in ("list_files", "read_file", "logout"):
         assert name in text
     assert "local" in text
+    # 只說檔名（「讀可疑筆記」）時，第二次 Windows 實測仍先搜尋本機
+    assert "only by its name" in text
     assert "「登出」" in text and "/logout" in text
     # 每次對話都會放進系統提示，保持精簡
     assert len(text) < 2000
