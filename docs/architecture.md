@@ -187,6 +187,7 @@ flowchart LR
 | 同意畫面已發布 | 任何 Google 帳號都能授權 | 不能用 test users 名單限制誰能使用 |
 | 逐頁處理 PDF | 混合型 PDF 不漏讀；只有掃描頁才付出算繪成本 | 每頁都要抽一次文字；PDFium 不是 thread-safe，同時只能處理一份 PDF |
 | 不做 OCR | 不需要額外的模型或服務 | 掃描頁交給 Claude 看影像，最多 5 頁 |
+| 沒有指明位置的說法預設當成 Drive（server instructions） | 「列出資料夾內的檔案」「那個 PDF」直接讀 Drive，不會去搜尋或讀取使用者電腦裡的檔案 | 裝了 plugin 之後，要讀本機檔案時須說出路徑或「我電腦上的」。登出會撤銷授權，所以單獨的「登出」不套用這個預設，先問 |
 
 ## 已知限制
 
@@ -200,6 +201,7 @@ flowchart LR
 - Broker 沒有速率限制或濫用防護。
 - refresh token 以檔案保存，沒有使用 OS keychain。
 - Claude Desktop 的 plugin 瀏覽器不能加入 GitHub 上的 marketplace，必須先在終端機安裝。
+- 要叫哪個 tool 由模型決定。plugin 只能透過 tool 描述與 server instructions 引導，不能保證每一種說法都叫對；Windows 上的實測結果見[驗證紀錄](verification.md#階段-5mcp-tools-整合)。
 
 ## 和常見做法的對照
 

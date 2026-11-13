@@ -192,3 +192,14 @@ def test_failed_revoke_tells_user_how_to_remove_access_manually(server: MCPServe
     auth.report = LogoutReport(had_credential=True, revoke=RevokeOutcome.FAILED, deleted=True)
 
     assert "myaccount.google.com/permissions" in call(server, "logout")
+
+
+def test_server_instructions_settle_drive_versus_local_and_bare_logout() -> None:
+    # Windows 實測（2026-11-13）：沒提到 Drive 的說法都被當成本機檔案，單獨的「登出」被當成 Claude Code 的 /logout
+    text = tools.SERVER_INSTRUCTIONS
+    for name in ("list_files", "read_file", "logout"):
+        assert name in text
+    assert "local" in text
+    assert "「登出」" in text and "/logout" in text
+    # 每次對話都會放進系統提示，保持精簡
+    assert len(text) < 2000

@@ -45,7 +45,7 @@ def build_server(config: Config) -> MCPServer:
     # C2：Drive Reading 拿到的是 token provider，不知道 token 從哪裡來
     drive = DriveReadingService(DriveApi(drive_http.new_http_client(), token_provider), config.root_folder)
 
-    server = MCPServer("drive-reader")
+    server = MCPServer("drive-reader", instructions=tools.SERVER_INSTRUCTIONS)
     tools.register_authorization_tools(server, authorization)
     tools.register_drive_tools(server, drive, account=token_provider.current_account)
     return server

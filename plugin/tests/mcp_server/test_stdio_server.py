@@ -6,8 +6,11 @@ import sys
 from pathlib import Path
 
 import anyio
+import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+
+from mcp_server.tools import SERVER_INSTRUCTIONS
 
 
 async def list_tool_names(env: dict[str, str]) -> list[str]:
@@ -26,6 +29,22 @@ def test_server_starts_over_stdio_and_lists_tools(tmp_path: Path) -> None:
     # 只有正式的 tool；階段 2 的 spike_image 已經移除
     assert sorted(names) == ["auth_status", "authorize", "list_files", "logout", "read_file"]
     assert not (tmp_path / "credentials.json").exists()
+
+
+async def handshake_instructions(env: dict[str, str], modern: bool) -> str | None:
+    params = StdioServerParameters(command=sys.executable, args=["-m", "mcp_server"], env=env)
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        result = await (session.discover() if modern else session.initialize())
+        return result.instructions
+
+
+@pytest.mark.parametrize("modern", [True, False], ids=["server-discover", "legacy-initialize"])
+def test_server_gives_claude_instructions_in_both_protocol_eras(tmp_path: Path, modern: bool) -> None:
+    # Claude Code 把 server instructions 放進系統提示，tool 被延後載入時模型也看得到。
+    # 第一次啟動太慢時 Claude Code 會改用舊協定（initialize），兩種握手都要帶到
+    env = dict(os.environ, DRIVE_READER_CREDENTIALS_PATH=str(tmp_path / "credentials.json"))
+
+    assert anyio.run(handshake_instructions, env, modern) == SERVER_INSTRUCTIONS
 
 
 def test_invalid_config_stops_startup_with_variable_name(tmp_path: Path) -> None:

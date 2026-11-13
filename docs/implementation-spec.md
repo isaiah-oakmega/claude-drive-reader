@@ -156,7 +156,7 @@ OakMega 審閱者要在**自己的環境**、用**自己的 Google 帳號**，�
 ### 驗證與呈現（不屬於 domain 不變式）
 
 - 資料夾與檔案參數都接受純 ID 或 Drive URL，解析後統一成 ID。
-- tool 描述以中英雙語列出常見說法；回傳給使用者的訊息用繁中。
+- tool 描述以中英雙語列出常見說法；回傳給使用者的訊息用繁中。說法沒有指明本機或 Drive 時怎麼處理，寫在 server instructions（見 C3）。
 
 ## Context Map and Dependency Direction
 
@@ -215,6 +215,8 @@ Google OAuth ──▶ Token Broker ──C1──▶ Local Authorization ──
 | `authorize` | — | 立即回傳授權 URL 與「完成後告訴我」；背景等待 Code Relay |
 | `auth_status` | — | 是否已授權、帳號 email、是否有進行中的 Authorization Attempt、上一次 Attempt 的結果（成功、拒絕、逾時、失敗；本次 process 尚未嘗試時為無）；保存的授權被 Google 拒絕而清除時，說明原本的授權已失效（記到重新授權成功或登出為止） |
 | `logout` | — | revoke 與刪除的結果 |
+
+server instructions（MCP 握手時提供，Claude Code 放進系統提示）：說明這個 server 讀的是一個 Google Drive 資料夾。「這個資料夾」「列出檔案」「那個 PDF」這類沒有指明位置的說法，除非使用者給了本機路徑、說檔案在這台電腦上，或對話本來就在談本機檔案，否則當成 Drive 資料夾處理，並說明是在 Google Drive 找的；不猜著搜尋或讀取本機檔案。使用者沒有指定、又有多個符合的檔案時，列出候選請使用者選。單獨的「登出」可能是指 Claude Code 自己的 `/logout`，看不出是指 Drive 時先問。
 
 Failure 代碼如下，代碼與語意都屬於合約：
 
@@ -378,7 +380,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 | Local Authorization | Context | Authorization Attempt 生命週期（一次性、逾時、取代、使用者拒絕；**`state` 不符的請求回 400 且不結束 Attempt，之後的有效 callback 仍能完成授權**）、`DRIVE_READER_CALLBACK_PORT` 固定 port、A7 結果頁不回顯參數、`auth_status` 回報上一次 Attempt 的結果、A4 權限與原子寫入、A5 `invalid_grant` 時刪除、A6 logout、C2 的 refresh 時機與 `invalidate` | Broker 測試、Drive Reading 內容處理 |
 | Drive Reading：存取與列出 | Context | 假 Drive：R1（含共用雲端硬碟、無法存取的祖先）、R2 捷徑、R3 上限、循環、分頁、404 與 401 的對應 | Broker 測試、Local Authorization 測試 |
 | Drive Reading：內容處理 | Local | fixture：有文字的 PDF、純影像的 PDF、**混合型 PDF**、PNG、超大圖片、不支援的類型；R4、R4a 上限與頁序、R5 回傳形狀；**沒有 `size` 的串流超過 20MB 時中止**、`exportSizeLimitExceeded` 對應成 Read Limitation、HTTP timeout | 其他所有測試 |
-| MCP Tool Surface（C3） | Contract | tool 註冊與參數 schema、Failure 格式 `[代碼] … 下一步：…` | 內部 handler 細節（已由 context 測試涵蓋） |
+| MCP Tool Surface（C3） | Contract | tool 註冊與參數 schema、Failure 格式 `[代碼] … 下一步：…`、server instructions 在新舊兩種協定的握手都帶到 | 內部 handler 細節（已由 context 測試涵蓋） |
 | 共用或 plugin 打包（`.mcp.json`、`pyproject.toml` 的套件清單、`uv.lock`） | System | CI 以 `uv sync --locked` 確認 lockfile 與 `pyproject.toml` 一致；在乾淨環境用和 `.mcp.json` 相同的 `uv run --frozen` 啟動，確認三個套件都安裝成功，並以 MCP 握手驗證 | — |
 | Context 邊界與分層 | System（靜態檢查） | import-linter 依「Repo 形態」的五條規則檢查，每次 push 都執行，成本極低 | — |
 | 交付里程碑 | Release | 在乾淨的 Claude Code 環境照 README 安裝，用第二個帳號跑完 spec 09 的自我驗收清單（情境 1–16，其中情境 16 要等 access token 實際過期後再讀一次），結果記錄在 `docs/` | — |

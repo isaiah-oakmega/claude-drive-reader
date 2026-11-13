@@ -33,6 +33,28 @@ from drive_reading.app import (
 from local_authorization.app import AttemptResult, AuthorizationService, AuthStatus, LogoutReport, RevokeOutcome
 from mcp_server.failures import KNOWN_FAILURES, failure_text
 
+# Claude Code 把這段放進系統提示（tool 被延後載入、模型還沒看到 tool 描述時也在）。
+# 為什麼需要：Claude Code 在本機資料夾裡啟動，Windows 實測時沒提到 Drive 的說法（「列出檔案」「有哪些 PDF」）
+# 都被當成本機檔案，甚至自己挑了一份本機 PDF 來讀；單獨的「登出」則被當成 Claude Code 的 /logout。
+# 列出與讀取是唯讀、只碰 Root Folder，說法模糊時預設用 Drive；登出會撤銷授權，模糊時先問。
+SERVER_INSTRUCTIONS = """\
+Drive Reader reads one Google Drive folder (the Root Folder in the plugin settings), read-only: list_files lists it \
+and read_file reads a file in it. authorize, auth_status and logout manage the Google authorization.
+
+Claude Code runs in a local directory, so requests such as "what's in this folder", "list the files", "that PDF", \
+"this image" or "the meeting notes" (「這個資料夾有什麼」「列出檔案」「有哪些 PDF」「那個 PDF」「這張圖片」「會議記錄」) \
+could mean local files or this Drive folder. Unless the user names a local path, says the files are on this computer, \
+or the conversation is already about local files, treat them as the Drive folder: use list_files / read_file, and \
+mention that you looked in Google Drive so the user can redirect you. Do not search or read local files on a guess.
+
+Never choose a file the user has not identified. If "that PDF" or "this image" matches more than one file, list the \
+candidates and ask which one.
+
+「登出」 or "log out" on its own may mean Claude Code's own /logout. Call logout only when the user is clearly talking \
+about Google Drive or Drive Reader; otherwise ask first. logout revokes the Google authorization, which also signs \
+Drive Reader out on the user's other computers that use the same Google account.
+"""
+
 _RESULT_LABELS = {
     None: "無（這次啟動後還沒有嘗試授權）",
     AttemptResult.SUCCEEDED: "成功",
@@ -92,8 +114,11 @@ def register_authorization_tools(server: MCPServer, auth: AuthorizationService) 
 
     @server.tool(
         description=(
-            "Log out: revoke Drive Reader's Google access and delete the locally stored credential. "
-            "登出並撤銷授權。常見說法：「登出」「取消授權」「換帳號」（先登出再重新授權）。"
+            "Log out of Google Drive for Drive Reader (not Claude Code's own /logout): revoke Drive Reader's Google "
+            "access and delete the locally stored credential. The revocation also ends Drive Reader's access on other "
+            "computers that use the same Google account. "
+            "登出 Google Drive 並撤銷授權（不是登出 Claude Code）。"
+            "常見說法：「登出 Google Drive」「登出 Drive Reader」「取消 Drive 授權」「換帳號」（先登出再重新授權）。"
         )
     )
     def logout() -> str:
