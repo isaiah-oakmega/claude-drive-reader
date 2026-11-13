@@ -307,6 +307,9 @@ Claude Code 啟動 stdio MCP server 時預設只等 30000ms（環境變數 `MCP_
 | 2026-11-12 06:17 Windows | 環境已經裝好，重開 Claude Code | legacy peer、跳過探測，協定 2025-11-25 | ✅ 7859ms 連上 |
 | 2026-11-13 06:39 Windows（測試 A） | 模擬全新電腦：在同一個 PowerShell 視窗把 `UV_CACHE_DIR`、`UV_PYTHON_INSTALL_DIR` 指向空資料夾，並設 `UV_PYTHON_PREFERENCE=only-managed`；照 README 安裝後直接啟動 Claude Code | 下載 Python 21.0MiB 與 5 個較大的套件，`Installed 32 packages in 565ms` 在 30 秒時才出現，server 來不及回應 | ❌ 30301ms 逾時 |
 | 2026-11-12 Linux | 同樣的模擬方式，用 `claude mcp list` 啟動 | 下載 Python 32.6MiB 與套件；探測逾時，但同一個 process 後來回應了，協定 2026-07-28 | ✅ 9657ms 連上 |
+| 2026-11-13 Windows（測試 B），手動 | 同樣模擬全新電腦，重新安裝 plugin（`e8939d1242db`）後，照新版 README 先在 PowerShell 執行 `uv sync --frozen --no-dev` | 終端機用進度條顯示，跑完後沒有留下各檔案的下載紀錄；最後一行 `Installed 32 packages in 451ms` | 742.16 秒 |
+| 2026-11-13 08:29 Windows（測試 B） | `uv sync` 完成後第一次啟動 Claude Code | 版本探測逾時，但同一個 process 後來回應了，協定 2026-07-28 | ✅ 17055ms 連上 |
+| 2026-11-13 08:32 Windows（測試 B） | 第二次啟動 | 沒有探測逾時，協定 2026-07-28 | ✅ 2436ms 連上 |
 
 結論：
 
@@ -319,7 +322,26 @@ Legacy peer 的影響：
 - 版本探測沒有得到回應時，Claude Code 會把 server 記成 legacy peer，之後跳過探測，改用 2025-11-25 協定連線（`hasResourceSubscribe: false`）。測試 A 換了新的安裝路徑（`fb206f5e42a1`），log 沒有出現 legacy peer 的紀錄，推測這個紀錄跟著安裝路徑，更新 plugin 後會重新探測（未另外驗證）。
 - 2026-11-13 Linux 檢查：自己寫一個 client，透過 stdio 送 `initialize`（protocolVersion 2025-11-25），不送 `server/discover`，模擬 legacy 連線。`initialize` 0.66 秒回應；`tools/list` 列出 5 個 tool；`auth_status`、`list_files`（開發用資料夾）、`read_file`（PNG 回傳文字、圖片、文字三段；PDF 回傳逐頁文字）都正常。`authorize` 與 `logout` 會開瀏覽器、撤銷授權，沒有呼叫；它們只回傳文字，和協定版本無關。server 沒有使用 resources、訂閱或 log 推送。結論：降為 legacy 不影響這個 plugin 的功能。
 
-尚未解釋：06:17 那次環境已經裝好，連線仍花了 7859ms，手動 import 只要 1.21 秒；Linux 上用 legacy `initialize` 只要 0.66 秒，所以不是 server 處理舊協定比較慢。需要 Windows 上再啟動一次，取得第二筆數字。
+測試 B（2026-11-13）：照新版 README 從頭安裝，第一次啟動就連上，`auth_status`、`authorize` 都能呼叫，從頭安裝的流程走得通。另外的觀察：
+
+- `uv sync` 花了 742 秒，測試 A 由 Claude Code 啟動時，同樣的下載在 30 秒內就完成了。終端機的進度條沒有留下逐檔紀錄，看不出時間花在哪裡；畫面上殘留的最後一格是 pydantic 下載到 398.60 KiB/482.49 KiB。推測是當時網路變慢或下載卡住，沒有證據確認。README 改成寫實測範圍（10 秒到 12 分鐘），並提醒不要中斷、中斷後重跑即可。沒有調整 `UV_HTTP_TIMEOUT`：它只控制多久沒收到資料就重試，不會讓下載變快。
+- 環境裝好後的第一次啟動：測試 B 17055ms（有探測逾時），2026-11-12 06:17 是 7859ms；第二次啟動 2436ms。第一次啟動較慢的原因沒有確定。「第一次 import 要產生 .pyc」的推測和 2026-11-12 的數據不符：那次 `uv sync` 後第一次手動 import 只花 1.21 秒，之後 Claude Code 啟動仍要 7859ms。所以沒有在 README 的 `uv sync` 加上 `--compile-bytecode`。環境裝好後即使逾時，也不必再下載任何東西，重連就會成功，README 的疑難排解寫明了這一點。
+- 重新安裝後的路徑是新的，log 沒有 legacy peer 的紀錄，協定回到 2026-07-28。
+
+## 一台電腦登出，其他電腦的授權也失效
+
+2026-11-13 測試 B 中，Windows 執行 `claude plugin marketplace remove` 時，Claude Code 顯示「The removal also deletes their saved options, secrets and data where it can.」。之後問授權狀態，`auth_status` 回報尚未授權。看起來像是移除 marketplace 刪掉了授權檔，但紀錄顯示不是：
+
+| 時間（UTC） | 來源 | 事件 |
+|---|---|---|
+| 2026-11-10 15:01–15:02 | Windows 的 MCP log | Windows 用主帳號授權（煙霧測試） |
+| 2026-11-10 15:13:10 | Linux 的 MCP log | Linux 用同一個主帳號執行 `logout`（情境 15），向 Google 撤銷授權 |
+| 2026-11-13 08:30:03 | Windows 的 MCP log、Cloud Run log | `auth_status` 拿 refresh token 換 token，Broker 的 `POST /token` 回 400（耗時 3.4 秒，含 Cloud Run 冷啟動），也就是 Google 拒絕了這個 refresh token |
+
+- 有送出換 token 的請求，表示當時授權檔還在。移除 marketplace 沒有刪掉它：Claude Code 刪的是它自己保存的 plugin 設定與資料，授權檔放在 `~/.config/claude-drive-reader/`，不在其中。之後是程式依 A5 在 `invalid_grant` 時刪檔，`auth_status` 因此回報尚未授權。
+- refresh token 被拒絕，最可能的原因是 Linux 那次登出：撤銷的是「這個帳號對 Drive Reader 的授權」，同一個帳號在 Windows 上的 refresh token 也一起失效。其他可能都排除了：同意畫面在 Windows 授權前就已經 Publish，不受 Testing 狀態 7 天失效的限制；期間也沒有手動撤銷。這個推論沒有另外做實驗驗證。
+- README 的「登出與解除安裝」補上這一點：在一台電腦登出，同一個帳號在其他電腦上也要重新授權。
+- 觀察：refresh token 失效時，`auth_status` 只顯示尚未授權，不會說明原本的授權已經失效。規格的情境 12 規定的是列出或讀取時回傳 `AUTH_EXPIRED`；`auth_status` 遇到同樣情況該顯示什麼，規格沒有寫。使用者重新授權就能繼續，不影響功能，目前沒有修改。
 
 ## 待使用者驗收（集中進行）
 
@@ -329,8 +351,8 @@ Legacy peer 的影響：
 
 方法見[第一次安裝的啟動逾時](#第一次安裝的啟動逾時)的測試 A：每個測試開新的 PowerShell 視窗，用新的空資料夾模擬全新電腦。
 
-- [ ] Windows：環境已經裝好時重開 Claude Code，記下 log 的連線時間（06:17 那次 7859ms，原因未明）
-- [ ] Windows 測試 B：模擬全新電腦，照新版 README 執行「安裝 plugin → `uv sync` → 啟動 Claude Code」，第一次啟動就連上；記下 `uv sync` 的秒數與 log 的連線時間
+- [x] Windows：環境已經裝好時重開 Claude Code，記下 log 的連線時間：測試 B 第二次啟動 2436ms
+- [x] Windows 測試 B：模擬全新電腦，照新版 README 執行「安裝 plugin → `uv sync` → 啟動 Claude Code」，第一次啟動就連上（2026-11-13：`uv sync` 742 秒，連線 17055ms）
 - [ ] Windows 測試 C（選做）：模擬全新電腦，安裝後用 `MCP_TIMEOUT=180000` 啟動，Claude Code 自己裝完並連上
 
 ### 準備：開發用資料夾的內容

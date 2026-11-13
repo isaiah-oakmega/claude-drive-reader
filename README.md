@@ -56,7 +56,9 @@ claude plugin install drive-reader --marketplace isaiah-oakmega/claude-drive-rea
 /plugin install drive-reader@drive-reader-marketplace
 ```
 
-接著在終端機**先把 plugin 的執行環境裝好**。這一步會下載 Python 3.12 與相依套件，實測約 10 到 30 秒，視網路速度而定。Claude Code 啟動 plugin 時最多只等 30 秒，第一次安裝如果留給 Claude Code 做，網路較慢時會逾時，所以先在這裡做完。第一次安裝、以及每次更新 plugin 之後都要做一次。
+接著在終端機**先把 plugin 的執行環境裝好**。這一步會下載 Python 3.12 與相依套件。Claude Code 啟動 plugin 時最多只等 30 秒，第一次安裝如果留給 Claude Code 做，網路較慢時會逾時，所以先在這裡做完。第一次安裝、以及每次更新 plugin 之後都要做一次。
+
+下載時間視網路而定，實測從 10 秒到 12 分鐘都有。終端機會顯示下載進度條，請等它跑完。如果中途中斷，重新執行同一個指令即可，已經下載完成的檔案會留在 uv 的快取，不需要重新下載。
 
 Windows（PowerShell）：
 
@@ -89,6 +91,16 @@ uv sync --frozen --no-dev --directory "$p"
 5. 瀏覽器顯示「**授權完成**」後，回到 Claude Code 說「好了」。
 
 為什麼會有警告：Drive 的唯讀權限屬於 Google 的 restricted scope，要移除警告必須通過付費的第三方安全評估（CASA），超出這份作業的範圍。授權網址在 5 分鐘內有效；逾時或想換帳號，再說一次「幫我授權」即可。
+
+為什麼授權網址是 `https://drive-auth.isaiahlin.dev/authorize?…`，不是 Google 的網址：這是這個 plugin 的授權轉接服務（Token Broker）。向 Google 換 token 需要 OAuth client secret，secret 不能放進公開的 plugin，所以由這個服務代為保管。它做的事只有三件：
+
+- 把你轉到 `accounts.google.com`，你在 Google 的頁面上登入、同意
+- 把 Google 回傳的授權碼轉回你電腦上的 `127.0.0.1`
+- 代替 plugin 向 Google 換 token
+
+這個服務不保存任何 token。refresh token 只存在你自己的電腦上。設計理由見 [ADR 0001](docs/adr/0001-refresh-token-held-locally-stateless-broker.md)。
+
+Claude 給你授權網址時，可能會提醒「這是第三方網域」「這個 app 未經 Google 驗證」，這都是預期中的狀況。你只需要確認兩件事：登入與同意的頁面網址列是 `accounts.google.com`；要求的權限只有雲端硬碟的唯讀存取。如果要求其他權限（例如 Gmail），就不要同意。
 
 ### 4. 使用
 
@@ -158,6 +170,7 @@ uv sync --frozen --no-dev --directory "$p"
 ### 登出與解除安裝
 
 - 說「**登出**」：先向 Google 撤銷授權，再刪除本機的授權檔。撤銷失敗時仍會刪檔，並告訴你可以到 [Google 帳號的第三方存取權頁面](https://myaccount.google.com/permissions) 手動移除。
+- 撤銷的對象是「這個 Google 帳號對 Drive Reader 的授權」，不只是這台電腦。在一台電腦登出後，同一個帳號在其他電腦上的授權也會失效，那些電腦下次使用時要重新授權。
 - 解除安裝 plugin **不會**刪除授權檔。請先登出，再執行：
   ```bash
   claude plugin uninstall drive-reader@drive-reader-marketplace
@@ -185,6 +198,8 @@ uv sync --frozen --no-dev --directory "$p"
 
 - Windows（PowerShell）：`$env:MCP_TIMEOUT = '180000'; claude`
 - macOS、Linux：`MCP_TIMEOUT=180000 claude`
+
+如果環境已經裝好（`uv sync` 跑完過）還是逾時，在 `/mcp` 選 `plugin:drive-reader:drive` 按 Reconnect，或重開 Claude Code。這時不需要再下載任何東西。實測環境裝好後的第一次啟動曾花 17 秒，第二次只花 2.4 秒。
 
 ---
 
