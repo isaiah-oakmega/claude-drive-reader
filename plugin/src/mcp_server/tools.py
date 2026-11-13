@@ -37,6 +37,7 @@ from mcp_server.failures import KNOWN_FAILURES, failure_text
 # 為什麼需要：Claude Code 在本機資料夾裡啟動，Windows 實測時沒提到 Drive 的說法（「列出檔案」「有哪些 PDF」）
 # 都被當成本機檔案，甚至自己挑了一份本機 PDF 來讀；單獨的「登出」則被當成 Claude Code 的 /logout。
 # 列出與讀取是唯讀、只碰 Root Folder，說法模糊時預設用 Drive；登出會撤銷授權，模糊時先問。
+# 另外，中文提問時列出結果多半是英文的 mimeType 與 ID，Claude 有時改用英文回答，所以也提醒回答的語言。
 SERVER_INSTRUCTIONS = """\
 Drive Reader reads one Google Drive folder (the Root Folder in the plugin settings), read-only: list_files lists it \
 and read_file reads a file in it. authorize, auth_status and logout manage the Google authorization.
@@ -51,6 +52,9 @@ file given only by its name, find it with list_files first, then pass its ID to 
 
 Never choose a file the user has not identified. If "that PDF" or "this image" matches more than one file, list the \
 candidates and ask which one.
+
+Reply in the language the user writes in (for example 繁體中文), even when file names, mimeTypes, IDs or file \
+contents are in English.
 
 「登出」 or "log out" on its own may mean Claude Code's own /logout. Call logout only when the user is clearly talking \
 about Google Drive or Drive Reader; otherwise ask first. logout revokes the Google authorization, which also signs \

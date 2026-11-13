@@ -350,7 +350,7 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 觀察：
 
 - 第 7 句畫面上出現一段英文的推理，其中有「Per Drive Reader instructions … Let me load the drive tools」。這表示使用者的 Claude Code 確實把 MCP tool 延後載入，而 server instructions 在 tool 載入之前就發揮了作用。這段文字由 Claude Code 決定是否顯示，plugin 無法控制。
-- 有時中文問、英文答：第 3 句整段是英文，第 2 句也夾了一行英文。Part 3 讀可疑筆記時也出現過。
+- 有時中文問、英文答：第 3 句整段是英文，第 2 句也夾了一行英文。Part 3 讀可疑筆記時也出現過。列出的結果多半是英文的 mimeType 與 ID，server instructions 也是英文，可能都有影響。使用者同意後，在 Part 5 開始前於 server instructions 加上「用使用者寫的語言回答」；Part 5 從 README 重新安裝，自然語言的步驟會一併驗證這一句的效果。
 - 第 5、7、11、12 句都停在 Claude 問要哪一個，使用者沒有選，所以「選了之後才 `read_file`」沒有實際走到。這一步就是一般的 `read_file`，Part 3 已經驗證過。
 
 ## 階段 6：CI 定稿
@@ -490,5 +490,6 @@ Legacy peer 的影響：
 - [ ] 移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，改用預設的出題方資料夾
 - [ ] 第二帳號授權時截下「Google 尚未驗證這個應用程式」警告與「進階」展開後的畫面，放進 README「快速開始」第 3 步（實作規格的 Release 步驟要求截圖；README 目前只有文字說明）
 - [ ] 乾淨環境照 README 從 repo 安裝，用第二帳號跑完情境 1–16（情境 16 要實際等 access token 過期）
+- [ ] Part 5 期間：中文提問時，Claude 用中文回答（server instructions 的語言提示）
 - [ ] Windows：情境 1、6、7、8、11、15
 - [ ] 再掃描一次 2026-11-10 之後新增的 commit，確認沒有 secret 或個人資料

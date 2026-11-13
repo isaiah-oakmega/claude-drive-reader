@@ -202,6 +202,8 @@ def test_server_instructions_settle_drive_versus_local_and_bare_logout() -> None
     assert "local" in text
     # 只說檔名（「讀可疑筆記」）時，第二次 Windows 實測仍先搜尋本機
     assert "only by its name" in text
+    # Windows 實測：中文問，列出結果裡多是英文的 mimeType 與 ID，Claude 有時改用英文回答
+    assert "language the user writes in" in text
     assert "「登出」" in text and "/logout" in text
     # 每次對話都會放進系統提示，保持精簡
     assert len(text) < 2000

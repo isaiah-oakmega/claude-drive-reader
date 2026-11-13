@@ -216,7 +216,7 @@ Google OAuth ──▶ Token Broker ──C1──▶ Local Authorization ──
 | `auth_status` | — | 是否已授權、帳號 email、是否有進行中的 Authorization Attempt、上一次 Attempt 的結果（成功、拒絕、逾時、失敗；本次 process 尚未嘗試時為無）；保存的授權被 Google 拒絕而清除時，說明原本的授權已失效（記到重新授權成功或登出為止） |
 | `logout` | — | revoke 與刪除的結果 |
 
-server instructions（MCP 握手時提供，Claude Code 放進系統提示）：說明這個 server 讀的是一個 Google Drive 資料夾。「這個資料夾」「列出檔案」「那個 PDF」這類沒有指明位置的說法，以及只說檔名的請求（「讀預算表」），除非使用者給了本機路徑、說檔案在這台電腦上，或對話本來就在談本機檔案，否則當成 Drive 資料夾處理，並說明是在 Google Drive 找的；不猜著搜尋或讀取本機檔案；只說檔名時先用 `list_files` 找到檔案再讀。使用者沒有指定、又有多個符合的檔案時，列出候選請使用者選。單獨的「登出」可能是指 Claude Code 自己的 `/logout`，看不出是指 Drive 時先問。
+server instructions（MCP 握手時提供，Claude Code 放進系統提示）：說明這個 server 讀的是一個 Google Drive 資料夾。「這個資料夾」「列出檔案」「那個 PDF」這類沒有指明位置的說法，以及只說檔名的請求（「讀預算表」），除非使用者給了本機路徑、說檔案在這台電腦上，或對話本來就在談本機檔案，否則當成 Drive 資料夾處理，並說明是在 Google Drive 找的；不猜著搜尋或讀取本機檔案；只說檔名時先用 `list_files` 找到檔案再讀。使用者沒有指定、又有多個符合的檔案時，列出候選請使用者選。單獨的「登出」可能是指 Claude Code 自己的 `/logout`，看不出是指 Drive 時先問。回答使用使用者的語言，即使檔名、mimeType 或內容是英文。
 
 Failure 代碼如下，代碼與語意都屬於合約：
 
