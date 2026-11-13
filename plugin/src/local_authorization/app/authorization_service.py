@@ -35,6 +35,8 @@ class AuthStatus:
     last_result: AttemptResult | None
     credentials_path: Path
     permissions_enforced: bool
+    # 沒有授權的原因是保存的授權被 Google 拒絕（例如在 Google 帳號頁撤銷，或同一個帳號在其他電腦登出）
+    credential_rejected: bool = False
 
 
 @dataclass(frozen=True)
@@ -176,6 +178,7 @@ class AuthorizationService:
             last_result=last_result,
             credentials_path=self._store.path,
             permissions_enforced=self._store.permissions_enforced,
+            credential_rejected=not authorized and self._tokens.credential_rejected,
         )
 
     # ---------- logout ----------

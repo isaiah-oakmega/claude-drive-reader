@@ -113,14 +113,19 @@ def _describe_status(status: AuthStatus) -> str:
         if status.permissions_enforced
         else "Windows：依使用者設定檔目錄的預設權限保護，程式不另外設定 ACL"
     )
-    return "\n".join(
-        [
-            f"授權狀態：{authorized}",
-            f"進行中的授權：{'有（等待瀏覽器完成）' if status.attempt_in_progress else '無'}",
-            f"上一次授權的結果：{_RESULT_LABELS[status.last_result]}",
-            f"授權保存位置：{status.credentials_path}（{protection}）",
-        ]
-    )
+    lines = [f"授權狀態：{authorized}"]
+    if status.credential_rejected:
+        # 和 AUTH_EXPIRED 的說法一致；使用者需要知道是原本的授權失效，不是從沒授權過
+        lines.append(
+            "原本的授權已失效：Google 拒絕了保存的授權（可能已在 Google 帳號頁撤銷、過期，"
+            "或同一個帳號在其他電腦上登出），本機保存的授權已清除。請重新授權。"
+        )
+    lines += [
+        f"進行中的授權：{'有（等待瀏覽器完成）' if status.attempt_in_progress else '無'}",
+        f"上一次授權的結果：{_RESULT_LABELS[status.last_result]}",
+        f"授權保存位置：{status.credentials_path}（{protection}）",
+    ]
+    return "\n".join(lines)
 
 
 def _describe_logout(report: LogoutReport) -> str:

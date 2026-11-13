@@ -141,6 +141,20 @@ def test_status_when_authorized_shows_account_and_attempt(server: MCPServer, aut
     assert "進行中的授權：有" in text
 
 
+def test_status_explains_when_saved_authorization_was_rejected(server: MCPServer, auth: FakeAuthorization) -> None:
+    auth.current = status(credential_rejected=True)
+
+    text = call(server, "auth_status")
+
+    assert "尚未授權" in text
+    assert "原本的授權已失效" in text
+    assert "重新授權" in text
+
+
+def test_status_does_not_mention_rejection_otherwise(server: MCPServer) -> None:
+    assert "已失效" not in call(server, "auth_status")
+
+
 def test_status_describes_file_protection_per_platform(server: MCPServer, auth: FakeAuthorization) -> None:
     # A4：只有 POSIX 才宣稱 0600
     assert "0600" in call(server, "auth_status")

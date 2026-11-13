@@ -213,7 +213,7 @@ Google OAuth ──▶ Token Broker ──C1──▶ Local Authorization ──
 | `list_files` | `folder?`（ID 或 URL，預設 Root Folder）、`recursive=True` | 每行一個項目：相對路徑、mimeType、大小、修改時間、ID；捷徑另外標示目標 ID；截斷時附註 |
 | `read_file` | `file`（ID 或 URL） | 文字 content；或 image content 加一行中繼資料；或 Read Limitation 說明。若參數是資料夾，回 Failure 並提示使用 `list_files` |
 | `authorize` | — | 立即回傳授權 URL 與「完成後告訴我」；背景等待 Code Relay |
-| `auth_status` | — | 是否已授權、帳號 email、是否有進行中的 Authorization Attempt、上一次 Attempt 的結果（成功、拒絕、逾時、失敗；本次 process 尚未嘗試時為無） |
+| `auth_status` | — | 是否已授權、帳號 email、是否有進行中的 Authorization Attempt、上一次 Attempt 的結果（成功、拒絕、逾時、失敗；本次 process 尚未嘗試時為無）；保存的授權被 Google 拒絕而清除時，說明原本的授權已失效（記到重新授權成功或登出為止） |
 | `logout` | — | revoke 與刪除的結果 |
 
 Failure 代碼如下，代碼與語意都屬於合約：
@@ -284,7 +284,7 @@ Failure 代碼如下，代碼與語意都屬於合約：
 9. **讀取 Google 文件、試算表、簡報**：匯出後回傳，試算表會註明只有第一個工作表。
 10. **讀取不支援的類型或過大的檔案**：回報 Read Limitation 與中繼資料，不下載。
 11. **用錯帳號授權，或還沒接受分享邀請**：`NOT_FOUND_OR_NO_ACCESS`，附上目前帳號 email 與「請接受邀請，或先 `logout` 換帳號」。
-12. **授權已被撤銷**（使用者在 Google 帳號頁撤銷）：refresh 拿到 `invalid_grant`，刪除 Local Credential，回傳 `AUTH_EXPIRED`，要求重新 `authorize`。
+12. **授權已被撤銷**（使用者在 Google 帳號頁撤銷，或同一個帳號在其他電腦上登出）：refresh 拿到 `invalid_grant`，刪除 Local Credential，回傳 `AUTH_EXPIRED`，要求重新 `authorize`。如果先問 `auth_status`，顯示尚未授權並說明原本的授權已失效。
 13. **prompt injection**：檔案內容誘導 Claude 讀取 Root Folder 外的檔案，`read_file` 回傳 `OUTSIDE_ROOT`。
 14. **Broker 無法連線**：回傳 `BROKER_UNREACHABLE`，附上 Broker 網址。
 15. **登出**：revoke 並刪除檔案，之後任何讀取都回到 `NOT_AUTHORIZED`。

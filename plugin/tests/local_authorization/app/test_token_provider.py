@@ -146,6 +146,38 @@ def test_current_account_is_none_when_token_unavailable(broker: FakeBroker, cloc
     assert provider_with(FakeStore(credential()), broker, clock).current_account() is None
 
 
+def test_rejected_credential_is_remembered_until_new_authorization(broker: FakeBroker, clock: Clock) -> None:
+    # auth_status 要能說明「原本的授權已失效」，不是只顯示尚未授權
+    broker.refresh_answer = raises(AuthExpired())
+    provider = provider_with(FakeStore(credential()), broker, clock)
+    assert provider.credential_rejected is False
+
+    assert provider.current_account() is None
+    assert provider.credential_rejected is True
+
+    provider.adopt(issued(refresh="1//R2"))
+    assert provider.credential_rejected is False
+
+
+def test_logout_clears_rejected_credential_notice(broker: FakeBroker, clock: Clock) -> None:
+    broker.refresh_answer = raises(AuthExpired())
+    provider = provider_with(FakeStore(credential()), broker, clock)
+    with pytest.raises(AuthExpired):
+        provider.get_access_token()
+
+    provider.forget()
+
+    assert provider.credential_rejected is False
+
+
+def test_unreachable_broker_is_not_a_rejected_credential(broker: FakeBroker, clock: Clock) -> None:
+    broker.refresh_answer = raises(BrokerUnreachable("https://broker.example"))
+    provider = provider_with(FakeStore(credential()), broker, clock)
+
+    assert provider.current_account() is None
+    assert provider.credential_rejected is False
+
+
 def test_new_authorization_or_logout_clears_cached_account(broker: FakeBroker, clock: Clock) -> None:
     account = FakeAccount("first@example.com")
     provider = provider_with(FakeStore(credential()), broker, clock, account)

@@ -341,7 +341,7 @@ Legacy peer 的影響：
 - 有送出換 token 的請求，表示當時授權檔還在。移除 marketplace 沒有刪掉它：Claude Code 刪的是它自己保存的 plugin 設定與資料，授權檔放在 `~/.config/claude-drive-reader/`，不在其中。之後是程式依 A5 在 `invalid_grant` 時刪檔，`auth_status` 因此回報尚未授權。
 - refresh token 被拒絕，最可能的原因是 Linux 那次登出：撤銷的是「這個帳號對 Drive Reader 的授權」，同一個帳號在 Windows 上的 refresh token 也一起失效。其他可能都排除了：同意畫面在 Windows 授權前就已經 Publish，不受 Testing 狀態 7 天失效的限制；期間也沒有手動撤銷。這個推論沒有另外做實驗驗證。
 - README 的「登出與解除安裝」補上這一點：在一台電腦登出，同一個帳號在其他電腦上也要重新授權。
-- 觀察：refresh token 失效時，`auth_status` 只顯示尚未授權，不會說明原本的授權已經失效。規格的情境 12 規定的是列出或讀取時回傳 `AUTH_EXPIRED`；`auth_status` 遇到同樣情況該顯示什麼，規格沒有寫。使用者重新授權就能繼續，不影響功能，目前沒有修改。
+- 改進（使用者同意後實作，2026-11-13）：原本 refresh token 失效時，`auth_status` 只顯示尚未授權，看不出原本的授權已經失效。現在 token provider 會記住「保存的授權被 Google 拒絕」，`auth_status` 多一行說明原本的授權已失效、本機授權已清除、請重新授權；重新授權成功或登出後清除。只記在記憶體中，MCP server 重啟後就回到一般的「尚未授權」。實作規格 C3 的 `auth_status` 欄位與情境 12 已同步補上。測試：`test_token_provider.py` 的 `test_rejected_credential_is_remembered_until_new_authorization`、`test_logout_clears_rejected_credential_notice`、`test_unreachable_broker_is_not_a_rejected_credential`；`test_authorization_service.py` 的 `test_status_reports_credential_rejected_by_google`；`test_tools.py` 的 `test_status_explains_when_saved_authorization_was_rejected`。plugin 全部 381 個測試通過，import-linter 5 條規則都通過
 
 ## 待使用者驗收（集中進行）
 

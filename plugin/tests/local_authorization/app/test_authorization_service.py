@@ -7,6 +7,7 @@ import pytest
 from local_authorization.app import (
     AccessTokenProvider,
     AttemptResult,
+    AuthExpired,
     AuthorizationService,
     BrokerUnreachable,
     CallbackPortUnavailable,
@@ -246,6 +247,18 @@ def test_status_with_credential_from_an_earlier_session() -> None:
     status = world.service.status()
 
     assert (status.authorized, status.account, status.last_result) == (True, "someone@example.com", None)
+    assert status.credential_rejected is False
+
+
+def test_status_reports_credential_rejected_by_google() -> None:
+    # 例如同一個帳號在另一台電腦登出：撤銷的是整個授權，這裡保存的 refresh token 也失效
+    world = World(initial=credential())
+    world.broker.refresh_answer = raises(AuthExpired())
+
+    status = world.service.status()
+
+    assert (status.authorized, status.account, status.credential_rejected) == (False, None, True)
+    assert world.store.credential is None
 
 
 # ---------- logout（A6） ----------

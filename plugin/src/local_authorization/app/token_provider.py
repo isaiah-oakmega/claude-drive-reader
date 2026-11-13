@@ -27,6 +27,9 @@ class AccessTokenProvider:
         self._clock = clock
         self._token: AccessToken | None = None
         self._email: str | None = None
+        # 保存的 refresh token 被 Google 拒絕而刪檔後，記到下一次授權成功或登出為止。
+        # 檔案已經刪了，只看檔案的話 auth_status 分不出「從沒授權」和「原本的授權已失效」
+        self._rejected = False
         # MCP 的 tool 在 worker thread 執行，授權完成的通知來自 listener 的 thread；
         # 鎖確保同時兩個請求不會各自 refresh，也不會讀到寫一半的狀態
         self._lock = threading.RLock()
@@ -48,6 +51,7 @@ class AccessTokenProvider:
                 # A5：Google 說這個 refresh token 已經沒用了，留著只會讓之後每次都失敗
                 self._store.delete()
                 self._token = self._email = None
+                self._rejected = True
                 raise
             self._token = AccessToken.issued(issued.access_token, issued.expires_in, now)
             if issued.refresh_token and issued.refresh_token != credential.refresh_token:
@@ -75,13 +79,21 @@ class AccessTokenProvider:
             self._email = self._account.email(token)
             return self._email
 
+    @property
+    def credential_rejected(self) -> bool:
+        """本次 process 中，保存的授權是否被 Google 拒絕（invalid_grant）而刪除，之後還沒有重新授權或登出。"""
+        with self._lock:
+            return self._rejected
+
     def adopt(self, issued: IssuedTokens) -> None:
         """授權完成時，直接使用換 code 拿到的 access token。帳號可能換了，所以清掉 email 快取。"""
         with self._lock:
             self._token = AccessToken.issued(issued.access_token, issued.expires_in, self._clock())
             self._email = None
+            self._rejected = False
 
     def forget(self) -> None:
         """logout 後丟掉記憶體中的 token 與 email。"""
         with self._lock:
             self._token = self._email = None
+            self._rejected = False
