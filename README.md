@@ -90,7 +90,7 @@ uv sync --frozen --no-dev --directory "$p"
 4. 確認要求的權限只有「查看及下載」雲端硬碟檔案（唯讀，不能修改或刪除），按「**繼續**」。
 5. 瀏覽器顯示「**授權完成**」後，回到 Claude Code 說「好了」。
 
-為什麼會有警告：Drive 的唯讀權限屬於 Google 的 restricted scope，要移除警告必須通過付費的第三方安全評估（CASA），超出這份作業的範圍。授權網址在 5 分鐘內有效；逾時或想換帳號，再說一次「幫我授權」即可。
+為什麼會有警告：Drive 的唯讀權限屬於 Google 的 restricted scope，要移除警告必須通過付費的第三方安全評估（CASA），超出這份作業的範圍。授權網址在 5 分鐘內有效，逾時了再說一次「幫我授權」即可。想換帳號，先說「登出 Google Drive」，再說「幫我授權」。
 
 為什麼授權網址是 `https://drive-auth.isaiahlin.dev/authorize?…`，不是 Google 的網址：這是這個 plugin 的授權轉接服務（Token Broker）。向 Google 換 token 需要 OAuth client secret，secret 不能放進公開的 plugin，所以由這個服務代為保管。它做的事只有三件：
 
