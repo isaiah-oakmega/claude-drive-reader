@@ -181,7 +181,7 @@ flowchart LR
 | refresh token 存在使用者電腦，後端無狀態 | 後端被攻破時沒有任何人的 token 外洩；不需要資料庫與金鑰管理 | 使用者電腦上的檔案外洩，就等於 refresh token 外洩。以檔案權限、`logout`、README 說明緩解 |
 | 檔案而不是 OS keychain | 三個平台行為一致，沒有額外依賴，程式碼少 | 保護程度取決於檔案權限；正式產品應改用 keychain（列為已知限制） |
 | `/token` 是公開端點 | Broker 不需要辨識呼叫者，保持無狀態 | 任何持有 refresh token 的人都能透過它 refresh。攻擊者必須先拿到使用者電腦上的檔案，風險可接受（ADR 0001） |
-| 處理都在本機（MCP server） | 檔案內容不經過後端；後端很小 | 驗收者電腦要有 uv；第一次啟動要下載 Python 與套件 |
+| 處理都在本機（MCP server） | 檔案內容不經過後端；後端很小 | 驗收者電腦要有 uv；安裝時要下載 Python 與套件（約 10 到 30 秒），而且要在啟動 Claude Code 前先用 `uv sync` 裝好，否則可能超過 Claude Code 30 秒的啟動時限 |
 | `uv run --frozen` 啟動 | 依賴版本由 `uv.lock` 完全鎖定，和 CI 測過的一致 | lockfile 是否和 `pyproject.toml` 一致，要靠我們這端的 CI（`--locked`）把關 |
 | 不送 Google 驗證 | 不需要 CASA 評估 | 使用者會看到未驗證警告 |
 | 同意畫面已發布 | 任何 Google 帳號都能授權 | 不能用 test users 名單限制誰能使用 |

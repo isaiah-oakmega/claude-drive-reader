@@ -112,7 +112,7 @@ resource.type="cloud_run_revision" AND resource.labels.service_name="token-broke
 |---|---|---|
 | #8：從 GitHub 安裝子目錄 `./plugin` | `claude plugin marketplace add isaiah-oakmega/claude-drive-reader#phase-2-local-auth`，再 `claude plugin install drive-reader@drive-reader-marketplace` | ✅ 2026-11-10 Linux，Claude Code 2.1.317：repo 還是 private，Claude Code 先確認 SSH key 可用，改用 SSH clone；marketplace 加入成功，plugin 裝在 user scope 且為 enabled。從安裝後的副本（`~/.claude/plugins/cache/…`）啟動 MCP server，1.4 秒完成握手 |
 | #1：MCP tool 回傳的圖片會交給模型 | 在新的 Claude Code session（Desktop 的 Code tab）要求呼叫 `spike_image` 並說出顏色 | ✅ 2026-11-10：模型回答由左到右為黃、黑、洋紅，和圖片一致 |
-| #4：`uv run --frozen` 第一次啟動的耗時 | 暫時的握手腳本照 `.mcp.json` 啟動 MCP server，量從啟動子程序到 `initialize` 完成的時間。冷：uv 快取與 Python 安裝目錄都指向全新的空目錄；熱：用現有的快取 | 2026-11-10 Linux：冷啟動 4.2 秒（含下載約 104MB 的 Python 3.12 與 29 個套件，實際時間取決於頻寬），熱啟動 1.2 秒。2026-11-12 Linux：空的 uv 快取（Python 已安裝）安裝 main 的相依套件 1.23 秒，import 整個 server 0.94–0.98 秒（兩次）。2026-11-12 Windows：plugin 從 `phase-2-local-auth` 換成 main 後，Claude Code 啟動 MCP server 逾時（30000ms），`/mcp` 重連也逾時。之後在 PowerShell 手動量：`uv sync --frozen --no-dev` 12.91 秒，import 整個 server 1.21 秒，合計約 14 秒，低於 30 秒的上限；重開 Claude Code 就連上了。手動量到的時間不足以解釋先前的逾時，原因沒有確定（未驗證的可能：第一次啟動另外下載 Python 本體；重連時前一次的安裝被中斷而重做）。README 疑難排解加上 `uv sync` 與 `MCP_TIMEOUT` 兩種處理方式 |
+| #4：`uv run --frozen` 第一次啟動的耗時 | 暫時的握手腳本照 `.mcp.json` 啟動 MCP server，量從啟動子程序到 `initialize` 完成的時間。冷：uv 快取與 Python 安裝目錄都指向全新的空目錄；熱：用現有的快取 | 2026-11-10 Linux：冷啟動 4.2 秒（含下載約 104MB 的 Python 3.12 與 29 個套件，實際時間取決於頻寬），熱啟動 1.2 秒。2026-11-12 Linux：空的 uv 快取（Python 已安裝）安裝 main 的相依套件 1.23 秒，import 整個 server 0.94–0.98 秒（兩次）。Windows 的實測與第一次啟動逾時的分析見[第一次安裝的啟動逾時](#第一次安裝的啟動逾時) |
 
 觀察：
 - `MCP_TIMEOUT` 的效果（2026-11-12 Linux，Claude Code 2.1.317）：暫時註冊一個先等 35 秒、再啟動真正 server 的 MCP server，執行 `claude mcp list`。預設設定下顯示 `connection timed out after 30000ms`，和 Windows 上的訊息相同；設定 `MCP_TIMEOUT=60000` 後顯示 Connected。測試用的 server 已移除
@@ -294,9 +294,44 @@ plugin 從 GitHub 的 `phase-2-local-auth` 安裝（`dde4655`），連線正式�
 
 階段 8 交付前，會再掃描這之後新增的 commit。
 
+## 第一次安裝的啟動逾時
+
+Claude Code 啟動 stdio MCP server 時預設只等 30000ms（環境變數 `MCP_TIMEOUT` 可以調整）。`.mcp.json` 用 `uv run` 啟動，第一次啟動時 uv 要先下載 Python 與套件、建立 `.venv`，這段時間也算在 30 秒內。Claude Code 的 log 會記下 uv 的 stderr（Windows：`%LOCALAPPDATA%\claude-cli-nodejs\Cache\<專案>\mcp-logs-plugin-drive-reader-drive\`），以下各列都取自 log 或手動計時。
+
+| 時間 | 情況 | log 內容 | 結果 |
+|---|---|---|---|
+| 2026-11-10 15:00 Windows | 第一次安裝 `phase-2-local-auth`：uv 還沒有 Python，也沒有快取 | 下載 Python 21.0MiB，以及 cryptography、pydantic-core、pywin32；`Installed 30 packages in 243ms`；版本探測逾時，但同一個 process 後來回應了，協定 2026-07-28 | ✅ 16094ms 連上 |
+| 2026-11-12 05:48:13 Windows | plugin 換成 main（`c510b000970b`）：Python 已經有了，要另外下載 pillow 6.9MiB、pypdfium2 4.0MiB | 30 秒時兩個檔案都只有 `Downloading`，沒有 `Downloaded` | ❌ 30094ms 逾時 |
+| 2026-11-12 05:48:53 Windows | 第二次嘗試。使用者回報的訊息是 `/mcp` 的 `Failed to reconnect`，應該是手動 Reconnect | 記成 legacy peer、跳過探測；stderr 又從 `Downloading pillow`、`Downloading pypdfium2` 開始，表示上一次下載到一半的檔案沒有保留 | ❌ 30016ms 逾時 |
+| 2026-11-12 Windows，手動 | PowerShell 執行 `uv sync --frozen --no-dev`，接著 import 整個 server | — | 12.91 秒、1.21 秒 |
+| 2026-11-12 06:17 Windows | 環境已經裝好，重開 Claude Code | legacy peer、跳過探測，協定 2025-11-25 | ✅ 7859ms 連上 |
+| 2026-11-13 06:39 Windows（測試 A） | 模擬全新電腦：在同一個 PowerShell 視窗把 `UV_CACHE_DIR`、`UV_PYTHON_INSTALL_DIR` 指向空資料夾，並設 `UV_PYTHON_PREFERENCE=only-managed`；照 README 安裝後直接啟動 Claude Code | 下載 Python 21.0MiB 與 5 個較大的套件，`Installed 32 packages in 565ms` 在 30 秒時才出現，server 來不及回應 | ❌ 30301ms 逾時 |
+| 2026-11-12 Linux | 同樣的模擬方式，用 `claude mcp list` 啟動 | 下載 Python 32.6MiB 與套件；探測逾時，但同一個 process 後來回應了，協定 2026-07-28 | ✅ 9657ms 連上 |
+
+結論：
+
+- 在使用者的網路下，全新安裝約 30 秒，剛好卡在時限。換版本時只多下載兩個套件，也曾在 30 秒內下載不完。
+- 逾時會中止 uv，下載到一半的檔案不保留，重連要從頭下載，所以網路慢時重連也追不上。
+- README 的安裝步驟因此改成：安裝 plugin 後，先在終端機執行 `uv sync --frozen --no-dev --directory <plugin 路徑>` 把環境裝好，再啟動 Claude Code；每次更新 plugin 後也要重做。`MCP_TIMEOUT` 列在疑難排解，作為另一種做法。
+
+Legacy peer 的影響：
+
+- 版本探測沒有得到回應時，Claude Code 會把 server 記成 legacy peer，之後跳過探測，改用 2025-11-25 協定連線（`hasResourceSubscribe: false`）。測試 A 換了新的安裝路徑（`fb206f5e42a1`），log 沒有出現 legacy peer 的紀錄，推測這個紀錄跟著安裝路徑，更新 plugin 後會重新探測（未另外驗證）。
+- 2026-11-13 Linux 檢查：自己寫一個 client，透過 stdio 送 `initialize`（protocolVersion 2025-11-25），不送 `server/discover`，模擬 legacy 連線。`initialize` 0.66 秒回應；`tools/list` 列出 5 個 tool；`auth_status`、`list_files`（開發用資料夾）、`read_file`（PNG 回傳文字、圖片、文字三段；PDF 回傳逐頁文字）都正常。`authorize` 與 `logout` 會開瀏覽器、撤銷授權，沒有呼叫；它們只回傳文字，和協定版本無關。server 沒有使用 resources、訂閱或 log 推送。結論：降為 legacy 不影響這個 plugin 的功能。
+
+尚未解釋：06:17 那次環境已經裝好，連線仍花了 7859ms，手動 import 只要 1.21 秒；Linux 上用 legacy `initialize` 只要 0.66 秒，所以不是 server 處理舊協定比較慢。需要 Windows 上再啟動一次，取得第二筆數字。
+
 ## 待使用者驗收（集中進行）
 
 開發期間需要使用者本人操作的項目先跳過，記在這裡，最後在 Windows 上集中驗收。完成的項目移到各階段的「真實驗收」表格。
+
+### 第一次安裝
+
+方法見[第一次安裝的啟動逾時](#第一次安裝的啟動逾時)的測試 A：每個測試開新的 PowerShell 視窗，用新的空資料夾模擬全新電腦。
+
+- [ ] Windows：環境已經裝好時重開 Claude Code，記下 log 的連線時間（06:17 那次 7859ms，原因未明）
+- [ ] Windows 測試 B：模擬全新電腦，照新版 README 執行「安裝 plugin → `uv sync` → 啟動 Claude Code」，第一次啟動就連上；記下 `uv sync` 的秒數與 log 的連線時間
+- [ ] Windows 測試 C（選做）：模擬全新電腦，安裝後用 `MCP_TIMEOUT=180000` 啟動，Claude Code 自己裝完並連上
 
 ### 準備：開發用資料夾的內容
 
