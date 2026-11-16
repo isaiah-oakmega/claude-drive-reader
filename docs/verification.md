@@ -488,7 +488,7 @@ Legacy peer 的影響：
 
 - [ ] 收到出題方資料夾的分享邀請（2026-11-20 前沒收到就寫信詢問）
 - [ ] 移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，改用預設的出題方資料夾
-- [ ] 第二帳號授權時截下「Google 尚未驗證這個應用程式」警告與「進階」展開後的畫面，放進 README「快速開始」第 3 步（實作規格的 Release 步驟要求截圖；README 目前只有文字說明）
+- [x] 第二帳號授權時截下「這個應用程式未經 Google 驗證」警告（「進階」展開後）與同意畫面，放進 README「快速開始」第 3 步（2026-11-16，Windows Chrome；只保留頁面主體，開發者與帳號的 email 已遮蔽；README 的警告文字同時改成和實際畫面一致）
 - [ ] 乾淨環境照 README 從 repo 安裝，用第二帳號跑完情境 1–16（情境 16 要實際等 access token 過期）
 - [ ] Part 5 期間：中文提問時，Claude 用中文回答（server instructions 的語言提示）
 - [ ] Windows：情境 1、6、7、8、11、15

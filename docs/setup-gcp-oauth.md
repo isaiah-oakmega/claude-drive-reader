@@ -258,4 +258,4 @@ Claude 綁定網域時，Cloud Run 會給出一筆記錄，通常是：
 
 1. Google Auth Platform → **Audience** → **Publish app** → **Confirm**
 2. Publishing status 變成 **In production**
-3. 頁面可能顯示需要驗證，**不用送出驗證申請**（原因見 [ADR 0001](adr/0001-refresh-token-held-locally-stateless-broker.md) 與實作規格）。不送驗證時，使用者會看到「Google 尚未驗證這個應用程式」的警告，點「進階」→「前往 Drive Reader（不安全）」即可繼續
+3. 頁面可能顯示需要驗證，**不用送出驗證申請**（原因見 [ADR 0001](adr/0001-refresh-token-held-locally-stateless-broker.md) 與實作規格）。不送驗證時，使用者會看到「這個應用程式未經 Google 驗證」的警告，點「進階」→「前往「<你的網域>」(不安全)」即可繼續。未驗證的 app 在警告和同意畫面上顯示的是網域，不是 app 名稱

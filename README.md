@@ -86,8 +86,15 @@ uv sync --frozen --no-dev --directory "$p"
 
 1. Claude 顯示一個授權網址，並嘗試自動開啟瀏覽器。沒有自動開啟的話，手動點網址。
 2. 選擇要使用的 Google 帳號。
-3. Google 會顯示「**Google 尚未驗證這個應用程式**」的警告，畫面上的名稱是網域 `isaiahlin.dev`。點「**進階**」，再點「**前往 isaiahlin.dev（不安全）**」。
-4. 確認要求的權限只有「查看及下載」雲端硬碟檔案（唯讀，不能修改或刪除），按「**繼續**」。
+3. Google 會顯示「**這個應用程式未經 Google 驗證**」的警告，畫面上的名稱是網域 `isaiahlin.dev`。點「**進階**」，再點「**前往「isaiahlin.dev」(不安全)**」。
+
+   <img src="docs/images/oauth-unverified-warning.png" width="480" alt="Google 的未驗證警告，已點「進階」展開，下方是「前往「isaiahlin.dev」(不安全)」連結">
+
+4. 確認要求的權限只有「**查看及下載您的所有 Google 雲端硬碟檔案**」（唯讀，不能修改或刪除），按「**繼續**」。
+
+   <img src="docs/images/oauth-consent.png" width="560" alt="Google 同意畫面：isaiahlin.dev 只要求查看及下載雲端硬碟檔案，右下角是「繼續」按鈕">
+
+   截圖中的 email 已遮蔽。
 5. 瀏覽器顯示「**授權完成**」後，回到 Claude Code 說「好了」。
 
 為什麼會有警告：Drive 的唯讀權限屬於 Google 的 restricted scope，要移除警告必須通過付費的第三方安全評估（CASA），超出這份作業的範圍。授權網址在 5 分鐘內有效，逾時了再說一次「幫我授權」即可。想換帳號，先說「登出 Google Drive」，再說「幫我授權」。
