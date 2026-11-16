@@ -440,8 +440,56 @@ Legacy peer 的影響：
 
 - 有送出換 token 的請求，表示當時授權檔還在。移除 marketplace 沒有刪掉它：Claude Code 刪的是它自己保存的 plugin 設定與資料，授權檔放在 `~/.config/claude-drive-reader/`，不在其中。之後是程式依 A5 在 `invalid_grant` 時刪檔，`auth_status` 因此回報尚未授權。
 - refresh token 被拒絕，最可能的原因是 Linux 那次登出：撤銷的是「這個帳號對 Drive Reader 的授權」，同一個帳號在 Windows 上的 refresh token 也一起失效。其他可能都排除了：同意畫面在 Windows 授權前就已經 Publish，不受 Testing 狀態 7 天失效的限制；期間也沒有手動撤銷。這個推論沒有另外做實驗驗證。
+- 2026-11-16 實際發生一次，證實了這個推論：Part 5 時使用者在 Windows 用主帳號登出，之後開發者在 Linux 用同一個主帳號的授權呼叫 tool，得到 `AUTH_EXPIRED`，本機授權照 A5 刪除。
 - README 的「登出與解除安裝」補上這一點：在一台電腦登出，同一個帳號在其他電腦上也要重新授權。
 - 改進（使用者同意後實作，2026-11-13）：原本 refresh token 失效時，`auth_status` 只顯示尚未授權，看不出原本的授權已經失效。現在 token provider 會記住「保存的授權被 Google 拒絕」，`auth_status` 多一行說明原本的授權已失效、本機授權已清除、請重新授權；重新授權成功或登出後清除。只記在記憶體中，MCP server 重啟後就回到一般的「尚未授權」。實作規格 C3 的 `auth_status` 欄位與情境 12 已同步補上。測試：`test_token_provider.py` 的 `test_rejected_credential_is_remembered_until_new_authorization`、`test_logout_clears_rejected_credential_notice`、`test_unreachable_broker_is_not_a_rejected_credential`；`test_authorization_service.py` 的 `test_status_reports_credential_rejected_by_google`；`test_tools.py` 的 `test_status_explains_when_saved_authorization_was_rejected`。plugin 全部 381 個測試通過，import-linter 5 條規則都通過
+
+## 階段 8：交付前驗收（Windows）
+
+2026-11-16，使用者在 Windows（PowerShell 5.1、Chrome）照驗收手冊 Part 5 執行，扮演第一次看到 repo 的出題方。時間是 Windows 當地時間。
+
+### 5-1、5-2：乾淨環境、照 README 安裝
+
+| 步驟 | 結果 |
+|---|---|
+| 5-1 清環境：移除 marketplace（連同 plugin）、移除 `DRIVE_READER_ROOT_FOLDER`、刪除授權檔，重開 PowerShell 確認 | ✅ 環境變數沒有輸出、`credentials.json` 為 False、`settings.json` 沒有 `DRIVE_READER` |
+| 5-2 只看 README 安裝 | ✅ `claude --version` 符合需求；安裝 plugin 成功；`uv sync` 沒有紅字；`/mcp` 顯示 connected。README 沒有看不懂、和畫面不一致或需要猜的地方 |
+
+### 5-3：第二帳號授權（預設的出題方資料夾）
+
+| 情境 | 結果 |
+|---|---|
+| 1：第一次使用 | ✅「列出 Google Drive 資料夾內的檔案」→ `NOT_AUTHORIZED` → Claude 呼叫 `authorize`，主動提醒網域是第三方、會出現未驗證警告。登入頁的網址列是 `accounts.google.com`。使用者對照 README 的說明看得懂 |
+| 3：拒絕授權 | ✅ 在同意畫面按取消，瀏覽器顯示「已拒絕授權」，`auth_status` 顯示上一次授權的結果「已拒絕」 |
+| 2：手動開啟網址 | ✅ 關掉自動開啟的分頁，改點 Claude 給的網址，授權完成 |
+| 11：帳號沒有資料夾權限 | ✅ 說「好了」後列出，得到 `NOT_FOUND_OR_NO_ACCESS`，附上第二帳號的 email，建議接受分享邀請或登出換帳號 |
+
+授權過程的未驗證警告與同意畫面截圖已放進 README（見下方「待使用者驗收」）。
+
+第一次執行時，使用者用收到出題方分享的主帳號完成授權，列出了出題方的資料夾，所以測不到情境 11；接著只說「登出」，Claude 先問，使用者回答要登出授權後才呼叫 `logout`。之後改用第二帳號重做，上表是重做的結果。原因是驗收手冊用「主帳號／第二帳號」稱呼，使用者對不上實際是哪個帳號；程式每一步都照設計運作。
+
+### 5-4：第二帳號讀開發用資料夾
+
+設定 `DRIVE_READER_ROOT_FOLDER` 為開發用資料夾，重開 Claude Code。
+
+| 情境 | 結果 |
+|---|---|
+| 8：列出 | ✅ 列出的檔案包含子資料夾「報告」裡的檔案 |
+| 6：掃描型 PDF | ✅ 讀到 SCAN-01～05，註明第 6 頁以後省略 |
+| 7：圖片 | ✅ 描述了圖片內容，註明原圖 4000×3000、縮到長邊 1568px |
+| 14：Broker 網址錯誤 | ✅ 設成 `https://drive-auth.invalid`，得到 `BROKER_UNREACHABLE`，訊息附上這個網址 |
+| 16：access token 過期後再讀 | ✅ 11:15 讀取，13:09 再讀（間隔約 1 小時 54 分），正常讀到，沒有要求授權 |
+| 12：授權在 Google 帳戶被撤銷 | ✅ 到 Google 帳戶移除 Drive Reader 的存取權後列出 → `AUTH_EXPIRED`，Claude 接著發起新的授權。`auth_status` 顯示尚未授權，並說明原本的授權已失效（Google 拒絕了保存的授權，本機授權已清除）；`credentials.json` 為 False。用第二帳號重新授權成功 |
+| 15：登出 | ✅ `/clear` 後只說「登出」，Claude 用選單問要登出哪一個（使用者選 Drive Reader），沒有請使用者輸入 `/logout`。呼叫 `logout` 後回報已向 Google 撤銷、已刪除本機授權，並提醒同一個帳號在其他電腦上也會登出。再列出 → `NOT_AUTHORIZED`，Claude 接著發起授權（使用者關掉分頁，沒有授權） |
+
+情境 4、5、6a、9、10、13 沿用階段 2、4 的紀錄，Part 5 沒有重做。
+
+觀察：
+
+- **語言**：情境 15 中文提問，Claude 整段用英文回答。5-3 的回答都是中文，server instructions 的語言提示大致有效，但不是每次都有效。情境 15 和其他步驟的差別是只說了兩個字，而且中間經過 Claude Code 的選單；畫面上還出現「Recalled 1 memory」（見下一點）。這些都在 Claude Code 這一側，plugin 能做的只有 server instructions 裡的提示。
+- **Claude Code 的 auto memory**：情境 15 開始時畫面出現「Recalled 1 memory」，結束時出現「wrote 1 memory」。5-3 第一次登出後，Claude Code 曾把「說登出就直接登出 Drive」寫進使用者電腦上的記憶。這次 Claude 仍然先問，但重測「只說登出」之前要先刪掉這類記憶，結果才不受影響。auto memory 存在使用者自己的電腦上，出題方的電腦不會有這些記憶。
+- **`auth_status` 的措辭**：情境 12 重新授權到一半時，同時顯示「尚未授權」和「上一次授權的結果：成功」。「成功」指的是同一個 MCP server 啟動後較早的那次授權，Claude 還要另外解釋，容易誤會。
+- **錯誤後自動發起授權**：`AUTH_EXPIRED` 和登出後的 `NOT_AUTHORIZED`，Claude 都沒有先問就呼叫 `authorize`、打開瀏覽器。這是 `authorize` 描述的設計（遇到這兩個代碼就授權）。開啟網址不會授予任何權限，要使用者在 Google 的畫面按同意才會授權。
 
 ## 待使用者驗收（集中進行）
 
@@ -482,14 +530,14 @@ Legacy peer 的影響：
 - [x] Windows，沒有上下文（每句先 `/clear`）：「列出資料夾內的檔案」「這個資料夾有什麼」「列出檔案」「有哪些 PDF」「幫我看那個 PDF 寫了什麼」「摘要會議記錄」「這張圖片是什麼」都叫 Drive Reader 的 tool，或先問清楚；不搜尋、不讀取本機檔案。「授權好了嗎」「幫我授權」仍然叫對
 - [x] Windows，同一段對話接著問：先說「列出 Google Drive 資料夾內的檔案」，再說「幫我看那個 PDF 寫了什麼」「這張圖片是什麼」，都讀 Drive
 - [x] Windows，指明本機時仍用本機：「列出我電腦上目前這個資料夾的檔案」不叫 `list_files`
-- [ ] Windows（5-4 情境 15，第二帳號）：`/clear` 後只說「登出」，Claude 先問是不是要登出 Google Drive，而不是請你輸入 `/logout`
+- [x] Windows（5-4 情境 15，第二帳號）：`/clear` 後只說「登出」，Claude 先問是不是要登出 Google Drive，而不是請你輸入 `/logout`（2026-11-16，Claude 用選單問要登出哪一個）
 
 ### 階段 8：交付前
 
-- [ ] 收到出題方資料夾的分享邀請（2026-11-20 前沒收到就寫信詢問）
-- [ ] 移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，改用預設的出題方資料夾
+- [x] 收到出題方資料夾的分享邀請（2026-11-16 前收到，主帳號已能列出）
+- [ ] Windows（5-5，主帳號）：移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，用預設的出題方資料夾列出、讀 PDF、描述圖片
 - [x] 第二帳號授權時截下「這個應用程式未經 Google 驗證」警告（「進階」展開後）與同意畫面，放進 README「快速開始」第 3 步（2026-11-16，Windows Chrome；只保留頁面主體，開發者與帳號的 email 已遮蔽；README 的警告文字同時改成和實際畫面一致）
-- [ ] 乾淨環境照 README 從 repo 安裝，用第二帳號跑完情境 1–16（情境 16 要實際等 access token 過期）
-- [ ] Part 5 期間：中文提問時，Claude 用中文回答（server instructions 的語言提示）
-- [ ] Windows：情境 1、6、7、8、11、15
+- [x] 乾淨環境照 README 從 repo 安裝，用第二帳號跑完情境 1–16（情境 16 要實際等 access token 過期）（2026-11-16 Part 5 的 5-1 到 5-4；情境 4、5、6a、9、10、13 沿用階段 2、4 的紀錄）
+- [ ] Part 5 期間：中文提問時，Claude 用中文回答（server instructions 的語言提示）。5-3 都是中文；5-4 情境 15 整段英文，見[階段 8](#階段-8交付前驗收windows)的觀察
+- [x] Windows：情境 1、6、7、8、11、15（2026-11-16）
 - [ ] 再掃描一次 2026-11-10 之後新增的 commit，確認沒有 secret 或個人資料
