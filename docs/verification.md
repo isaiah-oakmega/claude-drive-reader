@@ -488,8 +488,31 @@ Legacy peer 的影響：
 
 - **語言**：情境 15 中文提問，Claude 整段用英文回答。5-3 的回答都是中文，server instructions 的語言提示大致有效，但不是每次都有效。情境 15 和其他步驟的差別是只說了兩個字，而且中間經過 Claude Code 的選單；畫面上還出現「Recalled 1 memory」（見下一點）。這些都在 Claude Code 這一側，plugin 能做的只有 server instructions 裡的提示。
 - **Claude Code 的 auto memory**：情境 15 開始時畫面出現「Recalled 1 memory」，結束時出現「wrote 1 memory」。5-3 第一次登出後，Claude Code 曾把「說登出就直接登出 Drive」寫進使用者電腦上的記憶。這次 Claude 仍然先問，但重測「只說登出」之前要先刪掉這類記憶，結果才不受影響。auto memory 存在使用者自己的電腦上，出題方的電腦不會有這些記憶。
-- **`auth_status` 的措辭**：情境 12 重新授權到一半時，同時顯示「尚未授權」和「上一次授權的結果：成功」。「成功」指的是同一個 MCP server 啟動後較早的那次授權，Claude 還要另外解釋，容易誤會。
+- **`auth_status` 的措辭**：情境 12 重新授權到一半時，同時顯示「尚未授權」和「上一次授權的結果：成功」。「成功」指的是同一個 MCP server 啟動後較早的那次授權，Claude 還要另外解釋，容易誤會。決定不改（2026-11-16，使用者同意）：顯示的資訊都正確，只在「同一次啟動中授權成功、之後失效或登出、再重新授權到一半」才會出現，而且上一行已經說明原本的授權已失效；交付前改程式，交出去的版本就和驗收過的不同。
 - **錯誤後自動發起授權**：`AUTH_EXPIRED` 和登出後的 `NOT_AUTHORIZED`，Claude 都沒有先問就呼叫 `authorize`、打開瀏覽器。這是 `authorize` 描述的設計（遇到這兩個代碼就授權）。開啟網址不會授予任何權限，要使用者在 Google 的畫面按同意才會授權。
+
+### 5-5：主帳號讀出題方資料夾
+
+主帳號接受出題方的分享邀請；移除 `DRIVE_READER_ROOT_FOLDER`，在新視窗確認沒有輸出，plugin 改用預設的出題方資料夾。
+
+| 步驟 | 結果 |
+|---|---|
+| 「列出資料夾內的檔案」 | ✅ Claude 說明是在 Google Drive 找 → `NOT_AUTHORIZED` → 發起授權，附上第三方網域與未驗證警告的提醒 → 用主帳號完成授權 → 說「好了」後列出根資料夾的 2 個檔案 |
+| 讀 PDF | ✅ 讀出內容，追問重點也答對 |
+| 讀圖片 | ✅ 描述了圖片內容，並指出截圖只截到文件的一部分 |
+
+結束時的狀態和出題方使用時相同：主帳號已授權、沒有設定 `DRIVE_READER_ROOT_FOLDER`。
+
+### 交付前掃描
+
+2026-11-16 再掃描一次所有分支的完整歷史（67 個 commit，其中 46 個在 2026-11-10 的公開掃描之後），方法同[Repo 提前公開：歷史掃描](#repo-提前公開歷史掃描)：
+
+| 項目 | 結果 |
+|---|---|
+| secret 與 token（`GOCSPX`、`ya29.`、`1//0`、`4/0`、私鑰、GitHub token、Google API key、`client_secret` 的值） | ✅ 沒有真實值。命中的是測試用的假值（最長 18 個字元，真的 access token 遠比這長）、本文件描述搜尋方法的文字、`uv.lock` 的套件網址 |
+| email | ✅ 只有 `example.com`、`evil.example` 的範例、文件中的 Gmail 佔位字（`yourname@gmail.com` 形式）、README 部署指令中以 `$P`、`$N` 代入的 service account |
+| 開發用資料夾 ID | ⚠️ 2026-11-10 新增的兩個測試檔（`test_drive_id.py`、`test_config.py`）拿它當範例 ID。已換成假 ID，目前的檔案裡沒有；歷史中仍在，但沒有改寫歷史（理由同 commit email）。資料夾 ID 不是授權：沒有被分享的帳號，拿到 ID 也打不開 |
+| README 的兩張截圖 | ✅ PNG 只有 `IHDR`、`IDAT`、`IEND`，沒有文字或 EXIF 區塊 |
 
 ## 待使用者驗收（集中進行）
 
@@ -535,9 +558,9 @@ Legacy peer 的影響：
 ### 階段 8：交付前
 
 - [x] 收到出題方資料夾的分享邀請（2026-11-16 前收到，主帳號已能列出）
-- [ ] Windows（5-5，主帳號）：移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，用預設的出題方資料夾列出、讀 PDF、描述圖片
+- [x] Windows（5-5，主帳號）：移除開發用的 `DRIVE_READER_ROOT_FOLDER` 設定，用預設的出題方資料夾列出、讀 PDF、描述圖片（2026-11-16）
 - [x] 第二帳號授權時截下「這個應用程式未經 Google 驗證」警告（「進階」展開後）與同意畫面，放進 README「快速開始」第 3 步（2026-11-16，Windows Chrome；只保留頁面主體，開發者與帳號的 email 已遮蔽；README 的警告文字同時改成和實際畫面一致）
 - [x] 乾淨環境照 README 從 repo 安裝，用第二帳號跑完情境 1–16（情境 16 要實際等 access token 過期）（2026-11-16 Part 5 的 5-1 到 5-4；情境 4、5、6a、9、10、13 沿用階段 2、4 的紀錄）
-- [ ] Part 5 期間：中文提問時，Claude 用中文回答（server instructions 的語言提示）。5-3 都是中文；5-4 情境 15 整段英文，見[階段 8](#階段-8交付前驗收windows)的觀察
+- [ ] Part 5 期間：中文提問時，Claude 用中文回答（server instructions 的語言提示）。5-3 都是中文；5-4 情境 15 整段英文，見[階段 8](#階段-8交付前驗收windows)的觀察。不勾選，也不再修改：剩下的例外發生在 Claude Code 這一側，plugin 能給的提示已經給了
 - [x] Windows：情境 1、6、7、8、11、15（2026-11-16）
-- [ ] 再掃描一次 2026-11-10 之後新增的 commit，確認沒有 secret 或個人資料
+- [x] 再掃描一次 2026-11-10 之後新增的 commit，確認沒有 secret 或個人資料（2026-11-16，見[交付前掃描](#交付前掃描)）
