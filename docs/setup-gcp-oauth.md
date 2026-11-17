@@ -196,6 +196,8 @@ GCP Console 左側選單 → **APIs & Services** → **OAuth consent screen**（
 
 ### A7. 接受測試資料夾的分享邀請
 
+> 只有這份作業的開發者需要做這一步。自己重建時，改用自己的資料夾，並用 `DRIVE_READER_ROOT_FOLDER` 指定（見 README 的[設定](../README.md#設定)）。
+
 1. 用 `<你的Gmail>` 打開出題方寄來的 Google Drive 分享信，點 **開啟**
    - 找不到信的話，到 Google Drive → 左側 **與我共用**，找到那個資料夾
 2. 確認網址列的資料夾 ID 是 `1AU6ZW-3NFxme6388YPe98bGWWh9q_E5Y`
@@ -204,6 +206,8 @@ GCP Console 左側選單 → **APIs & Services** → **OAuth consent screen**（
 ✅ 完成條件：用 `<你的Gmail>` 開啟 https://drive.google.com/drive/folders/1AU6ZW-3NFxme6388YPe98bGWWh9q_E5Y 能看到檔案。
 
 ### A8. 準備第二個 Google 帳號
+
+> 這是自我驗收用的步驟，重建不需要。
 
 - 用來模擬「完全沒看過這個專案的驗收者」
 - 這個帳號**不要**：加進 GCP 專案、加進 Test users、接受測試資料夾的邀請
