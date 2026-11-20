@@ -19,7 +19,9 @@
 | Claude Code（終端機版）v2.1.292 以上 | 用 `claude --version` 確認。安裝方式見 [Claude Code 文件](https://code.claude.com/docs/en/setup) |
 | [uv](https://docs.astral.sh/uv/) | 安裝 plugin 時，用它下載 Python 3.12 與相依套件；不需要事先安裝 Python |
 | 一個 Google 帳號 | 能存取要讀取的 Drive 資料夾（如果是別人分享的，請先接受分享邀請） |
-| 在**本機**執行 Claude Code | 授權時，瀏覽器和 Claude Code 必須在同一台電腦上。SSH 遠端的用法見[疑難排解](#疑難排解) |
+
+> [!IMPORTANT]
+> 請在**本機**執行 Claude Code。授權時，瀏覽器和 Claude Code 必須在同一台電腦上。SSH 遠端的用法見[疑難排解](#疑難排解)。
 
 ### 1. 安裝 uv
 
@@ -37,7 +39,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 裝完後**重開終端機**，執行 `uv --version` 確認。
 
-> Windows 提醒：先裝 uv、再裝 Claude Code。uv 的安裝程式會把 `%USERPROFILE%\.local\bin` 加進 PATH，Claude Code 也裝在同一個資料夾。如果 `claude` 顯示 `is not recognized`，見[疑難排解](#疑難排解)。
+> [!TIP]
+> Windows：先裝 uv、再裝 Claude Code。uv 的安裝程式會把 `%USERPROFILE%\.local\bin` 加進 PATH，Claude Code 也裝在同一個資料夾。如果 `claude` 顯示 `is not recognized`，見 [Windows 找不到 claude](#windows-找不到-claude)。
 
 ### 2. 安裝 plugin
 
@@ -51,12 +54,14 @@ claude plugin install drive-reader --marketplace isaiah-oakmega/claude-drive-rea
 
 也可以在 Claude Code 裡面安裝，結果相同：
 
-```
+```text
 /plugin marketplace add isaiah-oakmega/claude-drive-reader
 /plugin install drive-reader@drive-reader-marketplace
 ```
 
-接著在終端機**先把 plugin 的執行環境裝好**。這一步會下載 Python 3.12 與相依套件。Claude Code 啟動 plugin 時最多只等 30 秒，第一次安裝如果留給 Claude Code 做，網路較慢時會逾時，所以先在這裡做完。第一次安裝、以及每次更新 plugin 之後都要做一次。
+### 3. 預先安裝執行環境
+
+在終端機**先把 plugin 的執行環境裝好**。這一步會下載 Python 3.12 與相依套件。Claude Code 啟動 plugin 時最多只等 30 秒，第一次安裝如果留給 Claude Code 做，網路較慢時會逾時，所以先在這裡做完。第一次安裝、以及每次更新 plugin 之後都要做一次。
 
 下載時間視網路而定，實測從 10 秒到 12 分鐘都有。終端機會顯示下載進度條，請等它跑完。如果中途中斷，重新執行同一個指令即可，已經下載完成的檔案會留在 uv 的快取，不需要重新下載。
 
@@ -78,9 +83,10 @@ uv sync --frozen --no-dev --directory "$p"
 
 然後**重新啟動 Claude Code**，輸入 `/mcp`，確認 `plugin:drive-reader:drive` 顯示 connected。如果顯示 `connection timed out after 30000ms`，見[啟動逾時](#啟動逾時)。
 
-> 使用 Claude Desktop 的 Code 分頁：Desktop 不能從畫面上加入 GitHub 上的 marketplace，請先在終端機執行上面的安裝指令。同一台電腦上的 Desktop 和終端機版共用設定，裝好後在 Desktop 開新的 session 就能使用。
+> [!NOTE]
+> 使用 Claude Desktop 的 Code 分頁：Desktop 不能從畫面上加入 GitHub 上的 marketplace，請先在終端機完成第 2、3 步。同一台電腦上的 Desktop 和終端機版共用設定，裝好後在 Desktop 開新的 session 就能使用。
 
-### 3. 授權
+### 4. 授權
 
 在 Claude Code 說「**列出 Google Drive 資料夾內的檔案**」。第一次使用時 Claude 會發現還沒授權，接著幫你開始授權：
 
@@ -97,9 +103,22 @@ uv sync --frozen --no-dev --directory "$p"
    截圖中的 email 已遮蔽。
 5. 瀏覽器顯示「**授權完成**」後，回到 Claude Code 說「好了」。
 
-為什麼會有警告：Drive 的唯讀權限屬於 Google 的 restricted scope，要移除警告必須通過付費的第三方安全評估（CASA），超出這份作業的範圍。授權網址在 5 分鐘內有效，逾時了再說一次「幫我授權」即可。想換帳號，先說「登出 Google Drive」，再說「幫我授權」。
+> [!IMPORTANT]
+> Claude 給你授權網址時，可能會提醒「這是第三方網域」「這個 app 未經 Google 驗證」，這都是預期中的狀況。你只需要確認兩件事：登入與同意的頁面網址列是 `accounts.google.com`；要求的權限只有雲端硬碟的唯讀存取。如果要求其他權限（例如 Gmail），就不要同意。
 
-為什麼授權網址是 `https://drive-auth.isaiahlin.dev/authorize?…`，不是 Google 的網址：這是這個 plugin 的授權轉接服務（Token Broker）。向 Google 換 token 需要 OAuth client secret，secret 不能放進公開的 plugin，所以由這個服務代為保管。它做的事只有三件：
+授權網址在 5 分鐘內有效，逾時了再說一次「幫我授權」即可。想換帳號，先說「登出 Google Drive」，再說「幫我授權」。
+
+<details>
+<summary>為什麼會有「未經 Google 驗證」的警告？</summary>
+
+Drive 的唯讀權限屬於 Google 的 restricted scope，要移除警告必須通過付費的第三方安全評估（CASA），超出這份作業的範圍。
+
+</details>
+
+<details>
+<summary>為什麼授權網址是 <code>drive-auth.isaiahlin.dev</code>，不是 Google 的網址？</summary>
+
+這是這個 plugin 的授權轉接服務（Token Broker）。向 Google 換 token 需要 OAuth client secret，secret 不能放進公開的 plugin，所以由這個服務代為保管。它做的事只有三件：
 
 - 把你轉到 `accounts.google.com`，你在 Google 的頁面上登入、同意
 - 把 Google 回傳的授權碼轉回你電腦上的 `127.0.0.1`
@@ -107,9 +126,9 @@ uv sync --frozen --no-dev --directory "$p"
 
 這個服務不保存任何 token。refresh token 只存在你自己的電腦上。設計理由見 [ADR 0001](docs/adr/0001-refresh-token-held-locally-stateless-broker.md)。
 
-Claude 給你授權網址時，可能會提醒「這是第三方網域」「這個 app 未經 Google 驗證」，這都是預期中的狀況。你只需要確認兩件事：登入與同意的頁面網址列是 `accounts.google.com`；要求的權限只有雲端硬碟的唯讀存取。如果要求其他權限（例如 Gmail），就不要同意。
+</details>
 
-### 4. 使用
+### 5. 使用
 
 作業的測試資料夾裡有一個 PDF 和一張圖片，可以依序試：列出檔案 → 讀 PDF → 看圖片。
 
@@ -131,9 +150,42 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
 - 符合的檔案不只一個時，Claude 會列出來請你選，不會自己挑一個。
 - 單獨說「登出」，Claude 可能以為你要登出 Claude Code，會先問你。請直接說「登出 Google Drive」。
 
-讀不了的檔案（不支援的類型、超過 20MB、有密碼的 PDF……）會回報原因與檔案資訊，不會讓對話中斷。
+讀不了的檔案（不支援的類型、超過 20MB、有密碼的 PDF……）會回報原因與檔案資訊，不會讓對話中斷。各類型怎麼讀見[支援的檔案類型與限制](#支援的檔案類型與限制)。
 
-### 設定
+## 提供的 tools
+
+Claude 會依你的說法選擇 tool，你不需要直接呼叫。
+
+| Tool | 參數 | 做什麼 |
+|---|---|---|
+| `authorize` | 無 | 開始授權：回傳授權網址，並嘗試開啟瀏覽器 |
+| `auth_status` | 無 | 回報是否已授權、帳號 email、是否有進行中的授權、上一次授權的結果、授權保存位置 |
+| `logout` | 無 | 向 Google 撤銷授權，並刪除本機保存的授權 |
+| `list_files` | `folder`：選填，Root Folder 內的資料夾 ID 或網址，省略時列出 Root Folder<br>`recursive`：選填，預設 `true`；`false` 只列出直接的子項目 | 每個項目一行：相對路徑、類型、大小、修改時間、ID |
+| `read_file` | `file`：檔案 ID 或網址，通常是 `list_files` 列出的 ID | 回傳文字或影像；讀不了時回傳原因與檔案資訊 |
+
+回傳格式與錯誤代碼的完整定義見[實作規格 C3](docs/implementation-spec.md#c3-mcp-tools)。
+
+## 支援的檔案類型與限制
+
+| 類型 | 讀取方式 |
+|---|---|
+| PDF | 逐頁判斷：有文字的頁面回傳文字，掃描頁轉成影像，依頁碼順序穿插 |
+| 圖片 | 縮到長邊 1568px 後以影像交給 Claude；動畫只取第一格 |
+| Google 文件、試算表、簡報 | 分別匯出成 Markdown、CSV（只有第一個工作表）、純文字 |
+| 文字檔、JSON、SVG 等 | 以文字讀取；無法解碼的字元會註明 |
+| Office 檔案、壓縮檔、影音、其他 Google 格式 | 不支援，不下載，回報檔案資訊 |
+
+| 上限 | 值 |
+|---|---|
+| 檔案大小 | 20MB |
+| 文字 | 50,000 字；結果含影像時 10,000 字 |
+| PDF 轉成影像的頁數 | 整份最多 5 頁 |
+| 列出 | 最多 5 層、500 筆 |
+
+超過上限不算錯誤：超過的部分省略並註明，超過 20MB 的檔案不下載，只回報檔案資訊。各項的做法與理由見[架構說明的讀取策略](docs/architecture.md#讀取策略)。
+
+## 設定
 
 預設讀取的資料夾是這份作業指定的測試資料夾。所有設定都是選填的環境變數：
 
@@ -157,13 +209,13 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
 
 設定錯誤時（例如 port 不是 1024–65535 的整數），plugin 會啟動失敗，`/mcp` 顯示 failed，錯誤原因寫在 Claude Code 的 MCP log 中。
 
-### 錯誤訊息
+## 錯誤訊息
 
 出錯時 Claude 會收到 `[代碼] 原因。下一步：…` 格式的訊息，並轉告你下一步怎麼做：
 
 | 代碼 | 意思 | 怎麼處理 |
 |---|---|---|
-| `NOT_AUTHORIZED` | 還沒授權 | 照[授權](#3-授權)步驟完成 |
+| `NOT_AUTHORIZED` | 還沒授權 | 照[授權](#4-授權)步驟完成 |
 | `AUTH_EXPIRED` | 授權已失效（例如在 Google 帳號頁撤銷了存取權） | 重新授權 |
 | `NOT_FOUND_OR_NO_ACCESS` | 找不到，或目前的帳號沒有權限；訊息會附上目前授權的帳號 email | 確認 ID 或網址；接受資料夾的分享邀請；或登出後改用有權限的帳號授權 |
 | `OUTSIDE_ROOT` | 目標不在設定的資料夾範圍內 | 只能讀範圍內的檔案。需要其他資料夾時，修改 `DRIVE_READER_ROOT_FOLDER` |
@@ -172,7 +224,7 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
 | `GOOGLE_API_ERROR` | Google Drive 回傳其他錯誤 | 稍後再試 |
 | `CALLBACK_PORT_UNAVAILABLE` | 設定的固定 port 被其他程式占用 | 換一個 port，或移除這個設定 |
 
-### Token 存放方式
+## Token 存放方式
 
 | 東西 | 放在哪裡 | 保護方式 |
 |---|---|---|
@@ -182,7 +234,7 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
 
 檔案裡只有 refresh token、權限範圍、取得時間三個欄位。後端不保存任何 token 或授權碼。完整的考量見[架構說明](docs/architecture.md#token-保存)。
 
-### 登出與解除安裝
+## 登出與解除安裝
 
 - 說「**登出 Google Drive**」：先向 Google 撤銷授權，再刪除本機的授權檔。撤銷失敗時仍會刪檔，並告訴你可以到 [Google 帳號的第三方存取權頁面](https://myaccount.google.com/permissions) 手動移除。
 - 撤銷的對象是「這個 Google 帳號對 Drive Reader 的授權」，不只是這台電腦。在一台電腦登出後，同一個帳號在其他電腦上的授權也會失效，那些電腦下次使用時要重新授權。
@@ -191,23 +243,23 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
   claude plugin uninstall drive-reader@drive-reader-marketplace
   ```
 
-### 疑難排解
+## 疑難排解
 
 | 狀況 | 處理 |
 |---|---|
 | `/mcp` 顯示 `plugin:drive-reader:drive` failed | 多半是找不到 `uv`。確認終端機中 `uv --version` 可以執行，然後**完全重啟** Claude Code（Desktop 要從系統匣結束再開） |
 | `/mcp` 顯示 `connection timed out after 30000ms` | 執行環境還沒裝好，Claude Code 在 30 秒內做不完安裝。見下方[啟動逾時](#啟動逾時) |
-| Windows：`claude` 顯示 `is not recognized` | Claude Code 的安裝程式不會修改 PATH。執行下面兩行後重開 PowerShell：<br>`$p = [Environment]::GetEnvironmentVariable('PATH', 'User')`<br>`[Environment]::SetEnvironmentVariable('PATH', "$p;$env:USERPROFILE\.local\bin", 'User')` |
+| Windows：`claude` 顯示 `is not recognized` | Claude Code 的安裝程式不會修改 PATH。見下方 [Windows 找不到 claude](#windows-找不到-claude) |
 | 瀏覽器沒有自動開啟 | 手動點 Claude 顯示的授權網址，結果相同 |
 | 同意後瀏覽器顯示「無法連上 127.0.0.1」 | 授權已逾時（超過 5 分鐘），或 Claude Code 在另一台電腦上。重新授權 |
 | Claude Code 跑在 SSH 遠端機器上 | 授權結果會送回瀏覽器那台電腦的 `127.0.0.1`，到不了遠端。進階做法：在遠端設定 `DRIVE_READER_CALLBACK_PORT=53682`，連線時加上 `ssh -L 53682:127.0.0.1:53682 <遠端>` 轉送這個 port |
 | 想換 Google 帳號 | 說「登出 Google Drive」，再說「幫我授權」，選另一個帳號 |
 
-#### 啟動逾時
+### 啟動逾時
 
-通常是跳過了[安裝 plugin](#2-安裝-plugin)裡「先把執行環境裝好」那一步，或更新 plugin 之後沒有重做。Claude Code 逾時會中止安裝，下載到一半的檔案不會保留，所以重連多半還是會逾時。先結束 Claude Code，再用下面任一種方法：
+通常是跳過了[預先安裝執行環境](#3-預先安裝執行環境)這一步，或更新 plugin 之後沒有重做。Claude Code 逾時會中止安裝，下載到一半的檔案不會保留，所以重連多半還是會逾時。先結束 Claude Code，再用下面任一種方法：
 
-**方法一（建議）：** 在終端機執行[安裝 plugin](#2-安裝-plugin)裡的指令，把環境裝好，再重新開啟 Claude Code。這一步沒有時間限制。
+**方法一（建議）：** 在終端機執行[預先安裝執行環境](#3-預先安裝執行環境)裡的指令，把環境裝好，再重新開啟 Claude Code。這一步沒有時間限制。
 
 **方法二：** 放寬啟動時限，讓 Claude Code 自己裝完。`MCP_TIMEOUT` 的單位是毫秒，只對這一次啟動有效：
 
@@ -215,6 +267,15 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
 - macOS、Linux：`MCP_TIMEOUT=180000 claude`
 
 如果環境已經裝好（`uv sync` 跑完過）還是逾時，在 `/mcp` 選 `plugin:drive-reader:drive` 按 Reconnect，或重開 Claude Code。這時不需要再下載任何東西。實測環境裝好後的第一次啟動曾花 17 秒，第二次只花 2.4 秒。
+
+### Windows 找不到 claude
+
+Claude Code 的安裝程式不會修改 PATH。在 PowerShell 執行下面兩行，再重開 PowerShell：
+
+```powershell
+$p = [Environment]::GetEnvironmentVariable('PATH', 'User')
+[Environment]::SetEnvironmentVariable('PATH', "$p;$env:USERPROFILE\.local\bin", 'User')
+```
 
 ---
 
@@ -239,7 +300,7 @@ Claude Code 是在你電腦上的某個資料夾裡啟動的，所以「這個�
 
 在 Google Cloud Console → **Google Auth Platform** → **Clients** → 你的 Web application client → **Authorized redirect URIs**，加入：
 
-```
+```text
 https://<你的後端網域>/callback
 ```
 
@@ -300,7 +361,8 @@ gcloud run deploy token-broker \
 gcloud beta run domain-mappings create --service token-broker --domain <DOMAIN> --region <REGION> --project $P
 ```
 
-**在第一次真實授權之前**，設定 Cloud Logging 的排除規則。Cloud Run 平台的請求記錄會保存完整網址，包含 `/callback?code=…` 的授權碼；後端程式本身不記 query string，但平台這一層只能用排除規則關掉：
+> [!WARNING]
+> **在第一次真實授權之前**，設定 Cloud Logging 的排除規則。Cloud Run 平台的請求記錄會保存完整網址，包含 `/callback?code=…` 的授權碼；後端程式本身不記 query string，但平台這一層只能用排除規則關掉。
 
 ```bash
 gcloud logging sinks update _Default --project $P \
@@ -325,7 +387,7 @@ curl https://<DOMAIN>/health
 
 ## 開發
 
-```
+```text
 backend/   Token Broker（FastAPI，部署在 Cloud Run）
 plugin/    Claude Code plugin：MCP server（Python，stdio）
   src/local_authorization/  授權流程、授權保存、提供 access token
